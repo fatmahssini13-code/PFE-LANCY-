@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
-// ignore: depend_on_referenced_packages
-import 'package:google_fonts/google_fonts.dart'; // Optionnel : installe google_fonts pour un look pro
-import 'register.dart';
+import 'package:flutter/material.dart'; // Importation des composants graphiques de base
+import 'package:google_fonts/google_fonts.dart'; // Importation de polices personnalisées pour le design
+import 'register.dart'; // Importation de la page d'inscription pour la navigation
 
 class ChooseRoleScreen extends StatefulWidget {
   const ChooseRoleScreen({super.key});
@@ -10,37 +9,40 @@ class ChooseRoleScreen extends StatefulWidget {
   State<ChooseRoleScreen> createState() => _ChooseRoleScreenState();
 }
 
+// Utilisation de SingleTickerProviderStateMixin pour gérer les animations si nécessaire
 class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerProviderStateMixin {
-  // Couleurs du projet
-  final Color mintCrystal = const Color(0xFF81E38F);
-  final Color skyBlue = const Color(0xFF74C0FC);
-  final Color backgroundLight = const Color(0xFFF9FBFF);
-  final Color darkText = const Color(0xFF1A1C1E);
+  // --- PALETTE DE COULEURS DU PROJET ---
+  final Color mintCrystal = const Color(0xFF81E38F); // Couleur secondaire (Freelancer/Succès)
+  final Color skyBlue = const Color(0xFF74C0FC);     // Couleur primaire (Client/Pro)
+  final Color backgroundLight = const Color(0xFFF9FBFF); // Couleur de fond douce
+  final Color darkText = const Color(0xFF1A1C1E);    // Couleur du texte principal
 
-  String selectedRole = "";
+  String selectedRole = ""; // Variable d'état pour suivre le rôle choisi ("client" ou "freelancer")
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundLight,
-      body: Stack(
+      backgroundColor: backgroundLight, // Application de la couleur de fond
+      body: Stack( // Utilisation d'un Stack pour superposer les éléments de design
         children: [
-          // Formes décoratives en arrière-plan
+          // FORME DÉCORATIVE HAUT-DROITE
           Positioned(
             top: -100,
             right: -50,
-            child: _buildCircle(300, skyBlue.withOpacity(0.05)),
+            child: _buildCircle(300, skyBlue.withOpacity(0.05)), // Cercle bleu très transparent
           ),
+          // FORME DÉCORATIVE BAS-GAUCHE
           Positioned(
             bottom: -50,
             left: -50,
-            child: _buildCircle(200, mintCrystal.withOpacity(0.08)),
+            child: _buildCircle(200, mintCrystal.withOpacity(0.08)), // Cercle vert très transparent
           ),
           
-          SafeArea(
+          SafeArea( // Empêche le contenu de chevaucher la barre d'état (encoche, heure)
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // BOUTON DE RETOUR PERSONNALISÉ
                 Padding(
                   padding: const EdgeInsets.only(left: 10, top: 10),
                   child: IconButton(
@@ -49,22 +51,22 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)], // Ombre légère
                       ),
                       child: Icon(Icons.arrow_back_ios_new, color: skyBlue, size: 20),
                     ),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(context), // Retour à l'écran précédent
                   ),
                 ),
                 
-                Expanded(
+                Expanded( // Le contenu central prend tout l'espace restant
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 30),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Badge dynamique
+                        // BADGE DE PROGRESSION (Étape 1 sur 2)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
@@ -76,8 +78,9 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
                             style: TextStyle(color: skyBlue, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 1.2),
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 20), // Espacement
                         
+                        // TITRE DE LA PAGE
                         Text(
                           "How would you like to use the platform?",
                           textAlign: TextAlign.center,
@@ -90,7 +93,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
                         ),
                         const SizedBox(height: 40),
 
-                        // Carte Client
+                        // CARTE POUR LE RÔLE CLIENT
                         _premiumRoleCard(
                           title: "I'm a Client",
                           subtitle: "I want to hire talent for my projects",
@@ -101,7 +104,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
 
                         const SizedBox(height: 20),
 
-                        // Carte Freelancer
+                        // CARTE POUR LE RÔLE FREELANCER
                         _premiumRoleCard(
                           title: "I'm a Freelancer",
                           subtitle: "I'm looking for work and AI opportunities",
@@ -121,6 +124,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
     );
   }
 
+  // --- WIDGET PERSONNALISÉ POUR LES CARTES DE RÔLE ---
   Widget _premiumRoleCard({
     required String title,
     required String subtitle,
@@ -128,22 +132,23 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
     required Color mainColor,
     required IconData icon,
   }) {
-    bool isSelected = selectedRole == role;
+    bool isSelected = selectedRole == role; // Vérifie si cette carte est celle sélectionnée
 
-    return GestureDetector(
-      onTapDown: (_) => setState(() => selectedRole = role),
+    return GestureDetector( // Détecte les interactions de l'utilisateur
+      onTapDown: (_) => setState(() => selectedRole = role), // Met à jour l'état visuel immédiatement au toucher
       onTap: () {
+        // Petit délai pour laisser l'animation de clic se terminer avant de naviguer
         Future.delayed(const Duration(milliseconds: 250), () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => RegisterScreen(role: role, email: '')),
+            MaterialPageRoute(builder: (_) => RegisterScreen(role: role, email: '')), // Passe le rôle à la page suivante
           );
         });
       },
-      child: AnimatedScale(
+      child: AnimatedScale( // Animation de zoom/réduction lors du clic
         scale: isSelected ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 150),
-        child: AnimatedContainer(
+        child: AnimatedContainer( // Animation de la bordure et de l'ombre
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
           padding: const EdgeInsets.all(20),
@@ -151,7 +156,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: isSelected ? mainColor : Colors.transparent,
+              color: isSelected ? mainColor : Colors.transparent, // Bordure colorée si sélectionné
               width: 2,
             ),
             boxShadow: [
@@ -164,14 +169,14 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
               ),
             ],
           ),
-          child: Row(
+          child: Row( // Organisation horizontale du contenu de la carte
             children: [
-              // Icon Box
+              // CONTENEUR DE L'ICÔNE
               Container(
                 height: 60,
                 width: 60,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: LinearGradient( // Dégradé léger pour l'icône
                     colors: [mainColor.withOpacity(0.2), mainColor.withOpacity(0.05)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -181,7 +186,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
                 child: Icon(icon, color: mainColor, size: 30),
               ),
               const SizedBox(width: 20),
-              // Text Content
+              // TEXTES (TITRE ET SOUS-TITRE)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +210,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
                   ],
                 ),
               ),
-              // Radio Indicator
+              // INDICATEUR CIRCULAIRE (RADIO BUTTON CUSTOM)
               Container(
                 height: 24,
                 width: 24,
@@ -213,7 +218,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: isSelected ? mainColor : Colors.grey.shade300,
-                    width: isSelected ? 7 : 2,
+                    width: isSelected ? 7 : 2, // Épaissit la bordure quand sélectionné
                   ),
                 ),
               ),
@@ -224,6 +229,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> with SingleTickerPr
     );
   }
 
+  // MÉTHODE UTILITAIRE POUR CRÉER LES FORMES D'ARRIÈRE-PLAN
   Widget _buildCircle(double size, Color color) {
     return Container(
       width: size,

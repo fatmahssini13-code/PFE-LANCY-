@@ -1,0 +1,74 @@
+<div class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="logo-section">
+      <img src="assets/lancy.jpg" alt="Lancy Logo">
+      <span>Lancy Admin</span>
+    </div>
+
+    <nav>
+      <a routerLink="/dashboard" routerLinkActive="active">
+        <span class="icon">📊</span> Dashboard
+      </a>
+      <a routerLink="/users" routerLinkActive="active">
+        <span class="icon">👥</span> Utilisateurs
+      </a>
+      <a routerLink="/projects" routerLinkActive="active">
+        <span class="icon">💼</span> Projets
+      </a>
+      <a routerLink="/settings" routerLinkActive="active">
+        <span class="icon">⚙️</span> Paramètres
+      </a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    
+    <header class="top-bar">
+      <div class="page-title">
+        <h2>Tableau de Bord</h2>
+        <p class="subtitle">Bienvenue sur votre gestionnaire Lancy</p>
+      </div>
+      
+      <div class="admin-actions">
+        <div class="admin-profile">
+          <span class="avatar">A</span>
+          <span class="name">Administrateur</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="dashboard">
+      <div class="cards">
+        
+        <div class="card card-blue">
+          <div class="card-icon">👤</div>
+          <div class="card-info">
+            <h3>Total Users</h3>
+            <p class="stat">{{ stats?.users || 0 }}</p>
+          </div>
+        </div>
+
+        <div class="card card-purple">
+          <div class="card-icon">🧑‍💻</div>
+          <div class="card-info">
+            <h3>Freelancers</h3>
+            <p class="stat">{{ stats?.freelancers || 0 }}</p>
+          </div>
+        </div>
+
+        <div class="card card-cyan">
+          <div class="card-icon">🏢</div>
+          <div class="card-info">
+            <h3>Clients</h3>
+            <p class="stat">{{ stats?.clients || 0 }}</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="recent-activity-section" style="margin-top: 30px;">
+        </div>
+      
+    </div>
+  </main>
+</div>

@@ -1,0 +1,27 @@
+<form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+  <div style="text-align: center; margin-bottom: 20px;">
+    <img src="assets/lancy.jpg" alt="Lancy Logo" style="width: 80px;">
+  </div>
+
+  <h2>Admin Login</h2>
+
+  <div *ngIf="step === 1">
+    <label>Email Admin</label>
+    <input type="email" formControlName="email" placeholder="admin@lancy.tn">
+
+    <label>Mot de passe</label>
+    <input type="password" formControlName="password" placeholder="••••••••">
+    
+    <button type="submit" [disabled]="false">Recevoir le code OTP</button>
+  </div>
+
+  <div *ngIf="step === 2">
+    <label>Entrez le code reçu par Email</label>
+    <input type="text" [(ngModel)]="otpValue" [ngModelOptions]="{standalone: true}" placeholder="000000">
+    
+    <p style="color: gray; font-size: 12px;">Un code a été envoyé à l'adresse admin.</p>
+    
+    <button type="button" (click)="verifyAdminOTP()">Vérifier et Entrer</button>
+    <button type="button" (click)="step = 1" style="background: gray;">Retour</button>
+  </div>
+</form>

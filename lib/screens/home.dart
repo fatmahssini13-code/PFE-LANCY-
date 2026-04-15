@@ -1,274 +1,213 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pfe/screens/ProfileScreen.dart';
+import 'package:pfe/service/home_service.dart';
+import 'package:pfe/service/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final String email;
   final String role;
 
-  const HomeScreen({super.key, required this.email, required this.role});
+  const HomeScreen({
+    super.key,
+    required this.email,
+    required this.role,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Palette de couleurs Premium
-  final Color mintCrystal = const Color(0xFF81E38F);
+  final HomeService homeService = HomeService();
+
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _budgetController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
+
   final Color skyBlue = const Color(0xFF74C0FC);
-  final Color backgroundLight = const Color(0xFFF9FBFF);
   final Color darkText = const Color(0xFF1A1C1E);
+  
+  get AuthService => null;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _budgetController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  void _goToProfile() {
+    Get.to(() => ProfileScreen(email: widget.email));
+  }
 
   @override
   Widget build(BuildContext context) {
-    bool isClient = widget.role == "client";
+    bool isClient = widget.role.trim().toLowerCase() == "client";
 
     return Scaffold(
-      backgroundColor: backgroundLight,
+      backgroundColor: const Color(0xFFF9FBFF),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        centerTitle: false,
-        title: Text(
-          "LANCY",
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.5,
-            color: darkText,
-          ),
-        ),
-        iconTheme: IconThemeData(color: darkText),
+        title: Text("LANCY",
+            style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w800, color: darkText)),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 15),
-            child: CircleAvatar(
+          IconButton(
+            onPressed: _goToProfile,
+            icon: CircleAvatar(
               backgroundColor: skyBlue.withOpacity(0.1),
-              child: Icon(Icons.notifications_none_rounded, color: skyBlue),
+              child: Text(widget.email[0].toUpperCase(),
+                  style: TextStyle(color: skyBlue)),
             ),
           ),
         ],
       ),
-      drawer: _buildModernDrawer(),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(25),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- HEADER DE BIENVENUE ---
-            _buildWelcomeHeader(isClient),
-            const SizedBox(height: 30),
-
-            // --- SECTION STATISTIQUES ---
-            _buildStatRow(isClient),
-            const SizedBox(height: 35),
-
-            // --- SECTION ACTIONS / CONTENU ---
-            Text(
-              isClient ? "Manage Projects" : "Recommended for You",
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: darkText,
-              ),
-            ),
-            const SizedBox(height: 15),
-            
-            isClient ? _buildClientActions() : _buildProjectList(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- COMPOSANTS UI ---
-
-  Widget _buildWelcomeHeader(bool isClient) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Hello, ${widget.email.split('@')[0]}!",
-          style: GoogleFonts.poppins(
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            color: darkText,
-          ),
-        ),
-        Text(
-          isClient ? "Find the best AI talent today." : "Explore new opportunities.",
-          style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 15),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatRow(bool isClient) {
-    return Row(
-      children: [
-        _buildStatCard("Active", isClient ? "3" : "12", skyBlue),
-        const SizedBox(width: 15),
-        _buildStatCard("Pending", isClient ? "1" : "4", mintCrystal),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
+      floatingActionButton: isClient
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddProjectSheet(context),
+              backgroundColor: skyBlue,
+              label: const Text("Publier un projet",
+                  style: TextStyle(color: Colors.white)),
+              icon: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
+      body: Padding(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
-          ],
-        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: GoogleFonts.inter(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 5),
-            Text(value, style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+            Text("Bonjour ${widget.email}",
+                style: GoogleFonts.poppins(
+                    fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            Expanded(child: _buildMainList(isClient)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildClientActions() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(25),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [skyBlue, skyBlue.withOpacity(0.7)]),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 40),
-          const SizedBox(height: 15),
-          Text(
-            "Have a new idea?",
-            style: GoogleFonts.poppins(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          Text(
-            "Post a project and get proposals within hours.",
-            style: GoogleFonts.inter(color: Colors.white.withOpacity(0.8), fontSize: 13),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: skyBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
+  // ================= ADD PROJECT =================
+  void _showAddProjectSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            left: 20,
+            right: 20,
+            top: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("Nouvelle mission 🚀",
+                style: GoogleFonts.poppins(
+                    fontSize: 20, fontWeight: FontWeight.bold)),
+
+            const SizedBox(height: 15),
+
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: "Titre"),
             ),
-            child: const Text("Post a Project", style: TextStyle(fontWeight: FontWeight.bold)),
-          )
-        ],
+
+            const SizedBox(height: 10),
+
+            TextField(
+              controller: _descController,
+              decoration: const InputDecoration(labelText: "Description"),
+            ),
+
+            const SizedBox(height: 10),
+
+            TextField(
+              controller: _budgetController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: "Budget"),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: skyBlue),
+              onPressed: () async {
+                try {
+                  String? token = await AuthService.getToken();
+
+                  if (token == null || token.isEmpty) {
+                    Get.snackbar("Erreur", "Reconnecte-toi !");
+                    return;
+                  }
+
+                  bool success = await homeService.addProject({
+                    "title": _titleController.text,
+                    "description": _descController.text,
+                    "budget": _budgetController.text,
+                    "clientEmail": widget.email,
+                  }, token);
+
+                  if (success) {
+                    Navigator.pop(context);
+                    Get.snackbar("Succès", "Projet ajouté !");
+                    setState(() {});
+                  } else {
+                    Get.snackbar("Erreur", "Échec ajout");
+                  }
+                } catch (e) {
+                  Get.snackbar("Erreur", e.toString());
+                }
+              },
+              child: const Text("Confirmer"),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildProjectList() {
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: 3,
-      separatorBuilder: (_, __) => const SizedBox(height: 15),
-      itemBuilder: (context, index) {
-        return Container(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.grey.withOpacity(0.1)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                height: 50, width: 50,
-                decoration: BoxDecoration(color: mintCrystal.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.auto_awesome, color: mintCrystal),
+  // ================= LIST =================
+  Widget _buildMainList(bool isClient) {
+    return FutureBuilder<List<dynamic>>(
+      future: isClient
+          ? homeService.fetchFreelancers()
+          : homeService.fetchProjects(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text("Erreur: ${snapshot.error}"));
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text("Aucune donnée"));
+        }
+
+        final data = snapshot.data!;
+
+        return ListView.builder(
+          itemCount: data.length,
+          itemBuilder: (context, index) {
+            final item = data[index];
+
+            return Card(
+              child: ListTile(
+                title: Text(item['title'] ??
+                    item['fullName'] ??
+                    "Sans titre"),
+                subtitle: Text(
+                    isClient ? "Freelancer" : "Projet"),
               ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("AI Model Fine-tuning", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                    Text("\$500 - \$1200", style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey[400]),
-            ],
-          ),
+            );
+          },
         );
       },
-    );
-  }
-
-  Widget _buildModernDrawer() {
-    return Drawer(
-      backgroundColor: backgroundLight,
-      child: Column(
-        children: [
-          _buildDrawerHeader(),
-          const SizedBox(height: 20),
-          _drawerItem(Icons.grid_view_rounded, "Dashboard", active: true),
-          _drawerItem(Icons.message_outlined, "Messages"),
-          _drawerItem(Icons.account_balance_wallet_outlined, "Payments"),
-          _drawerItem(Icons.settings_outlined, "Settings"),
-          const Spacer(),
-          const Divider(indent: 20, endIndent: 20),
-          _drawerItem(Icons.logout_rounded, "Logout", color: Colors.redAccent, onTap: () => Get.offAllNamed("/login")),
-          const SizedBox(height: 30),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawerHeader() {
-    return Container(
-      padding: const EdgeInsets.only(top: 60, left: 20, bottom: 25, right: 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [skyBlue, mintCrystal]),
-      ),
-      child: Row(
-        children: [
-          const CircleAvatar(radius: 30, backgroundColor: Colors.white, child: Icon(Icons.person, size: 35)),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.role.toUpperCase(), style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                Text(widget.email, style: GoogleFonts.inter(color: Colors.white.withOpacity(0.8), fontSize: 11), overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _drawerItem(IconData icon, String title, {bool active = false, Color? color, VoidCallback? onTap}) {
-    return ListTile(
-      onTap: onTap,
-      leading: Icon(icon, color: color ?? (active ? skyBlue : Colors.grey[600])),
-      title: Text(
-        title,
-        style: GoogleFonts.inter(
-          color: color ?? (active ? skyBlue : darkText),
-          fontWeight: active ? FontWeight.bold : FontWeight.w500,
-        ),
-      ),
-      horizontalTitleGap: 0,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 25),
     );
   }
 }

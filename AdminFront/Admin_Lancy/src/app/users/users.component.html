@@ -1,0 +1,43 @@
+<div class="container">
+
+  <h2>Gestion des utilisateurs</h2>
+
+  <div class="table-card">
+
+    <table>
+      <thead>
+        <tr>
+          <th>Nom</th>
+          <th>Email</th>
+          <th>Rôle</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr *ngFor="let user of users">
+          <td>{{ user.name }}</td>
+          <td>{{ user.email }}</td>
+
+          <td>
+            <span 
+              [ngClass]="{
+                'badge-client': user.role === 'client',
+                'badge-freelance': user.role === 'freelance'
+              }">
+              {{ user.role === 'client' ? 'Client' : 'Freelancer' }}
+            </span>
+          </td>
+
+       <td>
+    <button (click)="deleteUser(user._id)" class="btn-delete">
+      Supprimer
+    </button>
+  </td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+
+</div>
