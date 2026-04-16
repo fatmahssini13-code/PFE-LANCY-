@@ -69,7 +69,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Préparation du corps de la requête JSON
     Map<String, dynamic> userData = {
       "name": nameC.text.trim(),
-      "email": emailC.text.trim(),
+      "email": emailC.text.trim().toLowerCase(),
       "password": passC.text,
       "role": widget.role,
       // Ajout des données conditionnelles selon le rôle
@@ -77,29 +77,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
       "bio": widget.role == "freelancer" ? bioC.text.trim() : "",
     };
 
+    setState(() => loading = true);
     try {
-      // Affichage d'un indicateur de chargement modal
-      Get.dialog(const Center(child: CircularProgressIndicator(color: Colors.white)), barrierDismissible: false);
-
-      // 3. Appel de la méthode statique du service API (Backend Node.js)
       await ApiService.register(userData);
 
       if (!mounted) return;
-      if (Get.isDialogOpen!) Get.back(); // Fermer le chargement
 
-      // 4. Notification de succès et redirection vers l'OTP
       Get.snackbar("Presque fini ! ✨", "Un code de vérification a été envoyé.",
           backgroundColor: mintCrystal.withOpacity(0.9), colorText: Colors.white);
 
       Get.to(() => OTPVerificationScreen(
             email: emailC.text.trim(),
-            isFromRegister: true, // Indique qu'on vient de l'inscription
+            isFromRegister: true,
+            role: widget.role,
           ));
-
     } catch (e) {
-      if (Get.isDialogOpen!) Get.back();
+      if (!mounted) return;
       Get.snackbar("Erreur ❌", e.toString().replaceAll("Exception: ", ""),
           backgroundColor: Colors.redAccent.withOpacity(0.8), colorText: Colors.white);
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -246,7 +243,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // --- BOUTON DE SOUMISSION GRADIENT ---
   Widget _buildSubmitButton() {
     return InkWell(
-      onTap: _doRegister,
+      onTap: loading ? null : _doRegister,
       child: Container(
         width: double.infinity,
         height: 60,
@@ -258,10 +255,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ],
         ),
         child: Center(
-          child: Text(
-            "CRÉER MON COMPTE",
-            style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-          ),
+          child: loading
+              ? const SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  "CRÉER MON COMPTE",
+                  style: GoogleFonts.poppins(
+                      color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                ),
         ),
       ),
     );

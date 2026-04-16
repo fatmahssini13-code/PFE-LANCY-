@@ -8,13 +8,13 @@ import { Observable } from 'rxjs';
 export class AuthService {
 
   // L'URL de ton backend Node.js avec le préfixe /auth
-  private apiUrl = 'http://192.168.100.13:5000/auth';
+  private apiUrl = 'http://192.168.100.13:5001/auth';
 
   constructor(private http: HttpClient) { }
 
   // Méthode pour la connexion Admin (Dashboard)
   adminLogin(data: any): Observable<any> {
-    // Cette ligne appelle : http://192.168.100.13:5000/auth/admin-login
+    // Cette ligne appelle : http://192.168.100.13:5001/auth/admin-login
     return this.http.post(`${this.apiUrl}/admin-login`, data);
   }
 

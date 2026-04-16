@@ -19,7 +19,7 @@ export class LoginComponent {
   otpValue: string = '';
   
   // On définit l'URL de base pour ne pas la répéter (utilise ton IP actuelle .15)
-private apiUrl = "http://192.168.100.13:5000";
+private apiUrl = "http://192.168.100.13:5001";
   constructor(
     private fb: FormBuilder,
     private http: HttpClient, 

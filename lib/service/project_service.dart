@@ -1,12 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:pfe/config/api_config.dart';
 import 'auth_service.dart';
 
 class ProjectService {
-  final String baseUrl = "http://192.168.100.13:5000/api/projects";
-  
-  get AuthService => null;
-
   Future<bool> createProject(
     String title,
     String description,
@@ -20,7 +17,7 @@ class ProjectService {
       print("Envoi vers backend - Email: '$email', Budget: $budget");
 
       final response = await http.post(
-        Uri.parse("$baseUrl/add"),
+        Uri.parse("${ApiConfig.baseURL}/projects/add"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",

@@ -13,7 +13,7 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     // Appel de la route stats que nous avons créée dans Node.js
-    this.http.get('http://localhost:5000/api/admin/stats').subscribe(data => {
+    this.http.get('http://localhost:5001/api/admin/stats').subscribe(data => {
       this.stats = data;
     });
   }
