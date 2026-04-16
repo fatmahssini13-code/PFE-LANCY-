@@ -30,8 +30,9 @@ app.use("/api/projects", projectsRoutes);
  // <--- Déplacé ici pour plus de clarté
 
 // 5. CONNEXION DB ET LANCEMENT
-const PORT = 5000;
-const MY_IP = "192.168.100.13"; 
+// 5001 par défaut : sur macOS le port 5000 est souvent pris par AirPlay (réponses non-JSON → erreur côté app).
+const PORT = Number(process.env.PORT) || 5001;
+const MY_IP = "192.168.100.13";
 
 connectDB()
   .then(() => {

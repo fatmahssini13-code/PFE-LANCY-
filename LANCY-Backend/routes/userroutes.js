@@ -6,7 +6,16 @@ const User = require("../models/User");
 // --- 1. RÉCUPÉRER LE PROFIL (Version Optimisée pour Lancy) ---
 router.get("/profile/:email", async (req, res) => {
     try {
-        const user = await User.findOne({ email: req.params.email });
+        const emailNorm = decodeURIComponent(req.params.email || "")
+            .trim()
+            .toLowerCase();
+        if (!emailNorm) {
+            return res.status(400).json({ message: "Email requis" });
+        }
+        const esc = emailNorm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const user = await User.findOne({
+            email: { $regex: new RegExp("^" + esc + "$", "i") },
+        });
         if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
         let userData = {

@@ -4,6 +4,33 @@ const Project = require("../models/project");
 const User = require("../models/User");
 const { requireAuth } = require("../middleware/authMiddleware");
 
+// Projets du client connecté — GET /api/projects/my
+router.get("/my", requireAuth, async (req, res) => {
+  try {
+    const projects = await Project.find({ clientId: req.user._id })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.status(200).json(projects);
+  } catch (error) {
+    console.error("GET /api/projects/my", error);
+    res.status(500).json({ message: "Erreur serveur", error: error.message });
+  }
+});
+
+// Liste des projets (ex. vue freelancer) — GET /api/projects/
+router.get("/", async (req, res) => {
+  try {
+    const projects = await Project.find()
+      .populate("clientId", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
+    res.status(200).json(projects);
+  } catch (error) {
+    console.error("GET /api/projects/", error);
+    res.status(500).json({ message: "Erreur serveur", error: error.message });
+  }
+});
+
 // ✅ La route doit être "/add" et non "/api/projects/add"
 router.post("/add", requireAuth, async (req, res) => {
   try {
