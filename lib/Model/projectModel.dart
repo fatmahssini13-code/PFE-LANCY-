@@ -5,7 +5,7 @@ class ProjectModel {
   final String description;
   final int budget;
   final List<String> skillsRequired; // Liste des compétences (ex: ["Flutter", "Node.js"])
-  final String clientId;             // ID du client qui a posté le projet
+  final dynamic clientId;             // ID du client qui a posté le projet
   final String status;               // État du projet (ex: "open", "in_progress", "completed")
   final DateTime createdAt;          // Date de création convertie en objet Date Dart
 
@@ -38,8 +38,8 @@ class ProjectModel {
       
       // Gestion de la relation : si clientId est un objet (Populate), on prend son _id, sinon on prend la String
       clientId: json['clientId'] is Map 
-          ? json['clientId']['_id'] 
-          : (json['clientId'] ?? ''),
+          ? json['clientId']['_id']?.toString() ?? ''
+          : (json['clientId']?.toString() ?? '',),
           
       status: json['status'] ?? 'open',
       

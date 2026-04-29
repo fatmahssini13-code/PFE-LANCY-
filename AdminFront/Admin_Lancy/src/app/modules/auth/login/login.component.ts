@@ -19,7 +19,7 @@ export class LoginComponent {
   otpValue: string = '';
   
   // On définit l'URL de base pour ne pas la répéter (utilise ton IP actuelle .15)
-private apiUrl = "http://192.168.100.13:5000";
+private apiUrl = "http://192.168.100.13:5001";
   constructor(
     private fb: FormBuilder,
     private http: HttpClient, 
@@ -37,7 +37,7 @@ private apiUrl = "http://192.168.100.13:5000";
   onSubmit() {
     if (this.loginForm.valid) {
       // AJOUT DE /auth ICI 👇
-      this.http.post(`${this.apiUrl}/auth/admin-login`, this.loginForm.value)
+      this.http.post(`${this.apiUrl}/api/auth/admin-login`, this.loginForm.value)
         .subscribe({
           next: (res: any) => {
             this.step = 2; 
@@ -50,6 +50,7 @@ private apiUrl = "http://192.168.100.13:5000";
     }
   }
 
+
   // ÉTAPE 2 : Vérification du Code OTP
   verifyAdminOTP() {
     const data = { 
@@ -58,7 +59,7 @@ private apiUrl = "http://192.168.100.13:5000";
     };
 
     // AJOUT DE /auth ICI AUSSI 👇
-    this.http.post(`${this.apiUrl}/auth/verify-otp`, data)
+    this.http.post(`${this.apiUrl}/api/auth/verify-otp`, data)
       .subscribe({
         next: (res: any) => {
           localStorage.setItem('adminToken', res.token);

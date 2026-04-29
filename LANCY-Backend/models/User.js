@@ -26,7 +26,8 @@ const userSchema = new mongoose.Schema({
   // --- PARAMÈTRES COMMUNS ---
   avatar: { type: String, default: "" }, // URL de la photo
   phoneNumber: { type: String },
+  isVerified: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model("User", userSchema);
+module.exports = mongoose.models.User || mongoose.model("User", userSchema);

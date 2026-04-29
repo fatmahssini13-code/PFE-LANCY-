@@ -1,78 +1,142 @@
 const router = require("express").Router();
 const User = require("../models/User");
+const bcrypt = require("bcrypt"); // ✅ manquait !
+const multer = require("multer"); // ✅ une seule fois
+const path = require("path");     // ✅ une seule fois
+const fs = require("fs");         // ✅ une seule fois
 
-// --- 1. RÉCUPÉRER LE PROFIL (Adaptation dynamique selon le rôle) ---
-// Utilise l'email comme identifiant unique dans l'URL (ex: /profile/test@gmail.com)
-// --- 1. RÉCUPÉRER LE PROFIL (Version Optimisée pour Lancy) ---
+// Config multer
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = "uploads/avatars";
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `avatar_${Date.now()}${ext}`);
+  },
+});
+const upload = multer({ storage });
+
+// --- 1. GET PROFIL ---
 router.get("/profile/:email", async (req, res) => {
-    try {
-        const user = await User.findOne({ email: req.params.email });
-        if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
-
-        let userData = {
-            id: user._id,
-            name: user.name,
-            displayName: user.name || user.email.split('@')[0], // Pour Flutter user.displayName
-            email: user.email,
-            role: user.role,
-            avatar: user.avatar || `https://ui-avatars.com/api/?name=${user.name}`,
-            createdAt: user.createdAt
-        };
-
-        if (user.role === "freelancer") {
-            userData.speciality = user.speciality || "Freelancer";
-            userData.skills = user.skills || [];
-            userData.bio = user.bio || "Passionné par le digital.";
-        } else if (user.role === "client") {
-            userData.companyName = user.companyName || "Particulier";
-            
-            // OPTIONAL: Si tu as importé le modèle Project en haut du fichier,
-            // tu peux récupérer les vrais projets ici :
-            // const Project = require("../models/project");
-            // userData.projects = await Project.find({ clientId: user._id });
-        }
-
-        res.status(200).json(userData);
-    } catch (err) {
-        res.status(500).json({ message: "Erreur serveur", error: err.message });
+  try {
+    const emailNorm = decodeURIComponent(req.params.email || "")
+      .trim()
+      .toLowerCase();
+    if (!emailNorm) {
+      return res.status(400).json({ message: "Email requis" });
     }
+    const esc = emailNorm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const user = await User.findOne({
+      email: { $regex: new RegExp("^" + esc + "$", "i") },
+    });
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+    let userData = {
+      id: user._id,
+      name: user.name,
+      displayName: user.name || user.email.split("@")[0],
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar || null,
+      createdAt: user.createdAt,
+    };
+
+    if (user.role === "client") {
+      const Project = require("../models/project");
+      userData.companyName = user.companyName || "Particulier";
+      userData.projectCount = await Project.countDocuments({ clientId: user._id });
+    }
+
+    if (user.role === "freelancer") {
+      const Proposal = require("../models/proposal");
+      userData.speciality = user.speciality || "Freelancer";
+      userData.skills = user.skills || [];
+      userData.bio = user.bio || "";
+      userData.proposalCount = await Proposal.countDocuments({ freelancer: user._id });
+      userData.wonCount = await Proposal.countDocuments({
+        freelancer: user._id,
+        status: "accepted",
+      });
+    }
+
+    res.status(200).json(userData);
+  } catch (err) {
+    res.status(500).json({ message: "Erreur serveur", error: err.message });
+  }
 });
 
-// --- 2. MISE À JOUR DU PROFIL ---
-// Utilise la méthode PUT pour modifier des données existantes
+// --- 2. UPDATE PROFIL ---
 router.put("/update/:email", async (req, res) => {
-    try {
-        // 'req.body' contient les nouveaux champs saisis dans l'application mobile
-        const updates = req.body;
-        
-        const updatedUser = await User.findOneAndUpdate(
-            { email: req.params.email }, // Filtre : quel utilisateur modifier ?
-            { $set: updates },           // Action : mettre à jour avec les nouvelles données
-            { new: true }                // Option : renvoie l'utilisateur APRÈS modification
-        );
-
-        res.status(200).json({
-            message: "Profil mis à jour avec succès ✅",
-            user: updatedUser
-        });
-    } catch (err) {
-        res.status(500).json({ message: "Erreur lors de la mise à jour", error: err });
-    }
+  try {
+    const updates = req.body;
+    const updatedUser = await User.findOneAndUpdate(
+      { email: req.params.email },
+      { $set: updates },
+      { new: true }
+    );
+    res.status(200).json({
+      message: "Profil mis à jour avec succès ✅",
+      user: updatedUser,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur lors de la mise à jour", error: err });
+  }
 });
 
-// --- 3. RÉCUPÉRER TOUS LES FREELANCERS ---
-// Utile pour la page d'accueil ou la recherche côté Client
+// --- 3. ALL FREELANCERS ---
 router.get("/all-freelancers", async (req, res) => {
-    try {
-        // Filtre MongoDB : prend seulement ceux qui ont le rôle "freelancer"
-        // .select(...) : Limite les données renvoyées pour économiser de la bande passante
-        const freelancers = await User.find({ role: "freelancer" })
-                                      .select("name email speciality skills bio avatar");
-        
-        res.status(200).json(freelancers);
-    } catch (err) {
-        res.status(500).json({ message: "Erreur récupération freelancers", error: err });
+  try {
+    const freelancers = await User.find({ role: "freelancer" }).select(
+      "name email speciality skills bio avatar"
+    );
+    res.status(200).json(freelancers);
+  } catch (err) {
+    res.status(500).json({ message: "Erreur récupération freelancers", error: err });
+  }
+});
+
+// --- 4. CHANGE PASSWORD ---
+router.put("/change-password/:email", async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const user = await User.findOne({ email: req.params.email });
+
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Ancien mot de passe incorrect" });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({ message: "Mot de passe modifié ✅" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// --- 5. UPLOAD AVATAR ---
+router.post("/upload-avatar/:email", upload.single("avatar"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Aucun fichier reçu" });
     }
+
+    const avatarUrl = `${req.protocol}://${req.get("host")}/uploads/avatars/${req.file.filename}`;
+
+    await User.findOneAndUpdate(
+      { email: req.params.email },
+      { avatar: avatarUrl }
+    );
+
+    console.log(`✅ Avatar uploadé : ${avatarUrl}`);
+    res.json({ avatarUrl });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 module.exports = router;

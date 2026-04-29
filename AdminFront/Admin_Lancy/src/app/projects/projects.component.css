@@ -1,0 +1,105 @@
+/* Import de la police Poppins */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+
+.container-fluid {
+  font-family: 'Poppins', sans-serif;
+  padding: 2rem;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+}
+
+/* Titre principal */
+h2.text-primary {
+  color: #8E2DE2 !important; /* Violet Lancy */
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* Badge du compteur total */
+.badge.bg-info {
+  background-color: rgba(0, 174, 239, 0.1) !important;
+  color: #00AEEF !important;
+  border: 1px solid rgba(0, 174, 239, 0.2);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* Carte et Tableau */
+.card.shadow {
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05) !important;
+  overflow: hidden;
+}
+
+.table {
+  margin-bottom: 0;
+}
+
+.table thead.table-light {
+  background-color: #fcfaff;
+}
+
+.table thead th {
+  border: none;
+  color: #718096;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+  padding: 1.25rem;
+}
+
+.table tbody td {
+  padding: 1.25rem;
+  border-bottom: 1px solid #edf2f7;
+  color: #4a5568;
+}
+
+/* Effet de survol sur les lignes */
+.table-hover tbody tr:hover {
+  background-color: rgba(142, 45, 226, 0.02);
+  transition: all 0.2s ease;
+}
+
+/* Badges de Statut Personnalisés */
+.badge {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+/* Badge Budget (Soft Success) */
+.bg-success-soft {
+  background-color: rgba(46, 213, 115, 0.1) !important;
+  color: #2ed573 !important;
+}
+
+/* Couleurs de statut */
+.bg-warning { background-color: #fef3c7 !important; color: #d97706 !important; } /* Ouvert */
+.bg-primary { background-color: #e0f2fe !important; color: #00AEEF !important; } /* En cours */
+.bg-secondary { background-color: #f3f4f6 !important; color: #4b5563 !important; } /* Fermé */
+
+/* Bouton Supprimer */
+.btn-outline-danger {
+  border: 1px solid #ff4757;
+  color: #ff4757;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-outline-danger:hover {
+  background-color: #ff4757;
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 71, 87, 0.2);
+  transform: translateY(-1px);
+}
+
+/* Tooltip/Small text */
+.text-muted {
+  color: #a0aec0 !important;
+  font-size: 0.85rem;
+}

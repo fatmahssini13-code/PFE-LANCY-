@@ -1,9 +1,40 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 
 class AuthService {
+  // --- PERSISTENCE ---
+static Future<void> _persistAuthPayload(Map<String, dynamic> data) async {
+  final token = data["token"];
+  if (token is! String || token.isEmpty) return;
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString("token", token);
+
+  final user = data["user"];
+  if (user is Map) {
+    final u = Map<String, dynamic>.from(user);
+
+    if (u["_id"] != null) {
+      await prefs.setString("user_id", u["_id"].toString());
+    }
+
+    if (u["email"] != null) {
+      await prefs.setString("user_email", u["email"].toString());
+    }
+
+    if (u["role"] != null) {
+      await prefs.setString("user_role", u["role"].toString());
+    }
+
+    if (u["name"] != null) {
+      await prefs.setString("user_name", u["name"].toString());
+    }
+  }
+}
+
   // --- REGISTER ---
   static Future<void> register({
     required String email,
@@ -14,20 +45,17 @@ class AuthService {
     String? bio,
   }) async {
     final url = Uri.parse("${ApiConfig.baseURL}/auth/register");
-
-    final Map<String, dynamic> requestBody = {
-      "name": name,
-      "email": email,
-      "password": password,
-      "role": role,
-      "skills": skills ?? "",
-      "bio": bio ?? "",
-    };
-
     final res = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode(requestBody),
+      body: jsonEncode({
+        "name": name,
+        "email": email.trim().toLowerCase(),
+        "password": password,
+        "role": role,
+        "skills": skills ?? "",
+        "bio": bio ?? "",
+      }),
     );
 
     if (res.statusCode != 201) {
@@ -35,62 +63,84 @@ class AuthService {
     }
   }
 
-  // --- LOGIN (Version Corrigée) ---
-  static Future<dynamic> login({
+  // --- LOGIN ---
+  static Future<Map<String, dynamic>> login({
     required String email,
     required String password,
   }) async {
     final url = Uri.parse("${ApiConfig.baseURL}/auth/login");
+    final res = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "email": email.trim().toLowerCase(),
+        "password": password,
+      }),
+    ).timeout(const Duration(seconds: 15));
 
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200) {
+      throw Exception(data["message"] ?? "Login failed");
+    }
+
+    await _persistAuthPayload(data);
+    return Map<String, dynamic>.from(data);
+  }
+
+  // --- CHECK USER VALIDITY (L'ajout important) ---
+  static Future<bool> checkUserExists() async {
     try {
-      final res = await http.post(
+      final token = await getToken();
+      if (token == null) return false;
+
+      final url = Uri.parse("${ApiConfig.baseURL}/auth/profile");
+      final res = await http.get(
         url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email, "password": password}),
-      ).timeout(const Duration(seconds: 10));
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      ).timeout(const Duration(seconds: 5));
 
-      if (res.statusCode != 200) {
-        final errorData = jsonDecode(res.body);
-        throw errorData["message"] ?? "Erreur serveur (${res.statusCode})";
-      }
-
-      final data = jsonDecode(res.body);
-
-      if (data["token"] == null) {
-        throw "Le serveur n'a pas renvoyé de token.";
-      }
-
-      // Sauvegarde des infos essentielles
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("token", data["token"]);
-      
-      // Sauvegarde du rôle pour l'affichage du profil dynamique
-      if (data["role"] != null) {
-        await prefs.setString("user_role", data["role"]);
-      }
-
-      return data;
+      // Si le backend renvoie 200, l'utilisateur existe encore
+      return res.statusCode == 200;
     } catch (e) {
-      if (e is FormatException) {
-        throw "Format de réponse invalide (vérifie ton backend Node.js)";
-      }
-      throw e.toString();
+      return false; // En cas d'erreur réseau ou 401/404
     }
   }
 
-  // --- GESTION DU TOKEN & LOGOUT ---
+  // --- GETTERS ---
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString("token");
   }
 
-  static Future<void> logout() async {
+  static Future<String?> getUserEmail() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove("token");
-    await prefs.remove("user_role");
+    return prefs.getString("user_email");
   }
 
-  // --- RÉINITIALISATION DU MOT DE PASSE (OTP) ---
+  static Future<String?> getUserRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString("user_role");
+  }
+
+  static Future<String?> getUserName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString("user_name");
+  }
+
+  // --- LOGOUT & CLEANUP ---
+  static Future<void> removeToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); 
+  }
+
+  static Future<void> logout() async {
+    await removeToken();
+  }
+
+  // --- OTP & PASSWORD RESET ---
   static Future<void> forgotPassword({required String email}) async {
     final url = Uri.parse("${ApiConfig.baseURL}/auth/forgot-password");
     final res = await http.post(
@@ -98,28 +148,29 @@ class AuthService {
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"email": email}),
     );
-
-    if (res.statusCode != 200) {
-      throw Exception(jsonDecode(res.body)["message"] ?? "Failed to send OTP");
-    }
+    if (res.statusCode != 200) throw Exception("Failed to send OTP");
   }
 
   static Future<void> verifyOTP({
     required String email,
-    required String code, required bool isFromRegister,
+    required String code,
+    required bool isFromRegister,
   }) async {
     final url = Uri.parse("${ApiConfig.baseURL}/auth/verify-otp");
     final res = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"email": email, "code": code}),
+      body: jsonEncode({
+        "email": email,
+        "code": code,
+        "isFromRegister": isFromRegister,
+      }),
     );
-
-    if (res.statusCode != 200) {
-      throw Exception(jsonDecode(res.body)["message"] ?? "OTP verification failed");
-    }
+    final data = jsonDecode(res.body);
+    if (res.statusCode != 200) throw Exception(data["message"] ?? "OTP failed");
+    if (data["token"] != null) await _persistAuthPayload(data);
   }
-
+  // --- RESET PASSWORD ---
   static Future<void> resetPassword({
     required String email,
     required String code,
@@ -127,11 +178,12 @@ class AuthService {
     required String confirmPassword,
   }) async {
     final url = Uri.parse("${ApiConfig.baseURL}/auth/reset-password");
+    
     final res = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
-        "email": email,
+        "email": email.trim().toLowerCase(),
         "code": code,
         "newPassword": newPassword,
         "confirmPassword": confirmPassword,
@@ -139,7 +191,32 @@ class AuthService {
     );
 
     if (res.statusCode != 200) {
-      throw Exception(jsonDecode(res.body)["message"] ?? "Password reset failed");
+      final data = jsonDecode(res.body);
+      throw Exception(data["message"] ?? "Password reset failed");
     }
   }
+  static Future<void> changePassword({
+  required String email,
+  required String oldPassword,
+  required String newPassword,
+}) async {
+  final response = await http.put(
+    Uri.parse("${ApiConfig.origin}/api/users/change-password/$email"),
+    headers: {"Content-Type": "application/json"},
+    body: jsonEncode({
+      "oldPassword": oldPassword,
+      "newPassword": newPassword,
+    }),
+  );
+
+  if (response.statusCode != 200) {
+    final data = jsonDecode(response.body);
+    throw Exception(data['message'] ?? "Erreur serveur");
+  }
+}
+
+static Future<String?> getUserId() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString("user_id");
+}
 }

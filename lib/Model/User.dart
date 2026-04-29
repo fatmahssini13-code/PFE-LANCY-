@@ -6,7 +6,8 @@ class UserModel {
   final String? role;       // Pour distinguer "client" ou "freelancer"
   final List<String>? skills; // Liste des compétences techniques (ex: Java, Design, Marketing)
   final String? bio;        // Description personnelle
-  final String? speciality; // Le titre professionnel (ex: "Développeur Mobile Fullstack")
+  final String? speciality;
+  final String? avatar; // Le titre professionnel (ex: "Développeur Mobile Fullstack")
 
   UserModel({
     required this.id,
@@ -16,6 +17,7 @@ class UserModel {
     this.skills,
     this.bio,
     this.speciality,
+    this.avatar,
   });
 
   // --- FACTORY : JSON -> OBJET DART ---
@@ -34,6 +36,7 @@ class UserModel {
       
       bio: json['bio'],
       speciality: json['speciality'],
+      avatar:json['avatar'],
     );
   }
 
@@ -46,6 +49,12 @@ class UserModel {
   get companyName => null;
   get projects => null;
 
+  get proposalCount => null;
+
+  get projectCount => null;
+
+  get wonCount => null;
+
   // --- MÉTHODE : OBJET DART -> JSON ---
   // Utilisée par ton service pour mettre à jour le profil côté serveur Node.js
   Map<String, dynamic> toJson() {
@@ -55,6 +64,7 @@ class UserModel {
       'skills': skills,
       'bio': bio,
       'speciality': speciality,
+      'avatar':avatar,
     };
   }
 }

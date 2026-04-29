@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:pfe/screens/auth/ChooseRoleScreen.dart';
+import 'package:pfe/screens/auth/forgot_password_screen.dart';
 import 'package:pfe/screens/home.dart';
 import 'package:pfe/service/auth_service.dart';
-import 'package:pfe/screens/auth/forgot_password_screen.dart';
-import 'package:pfe/screens/auth/register.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,22 +13,33 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final emailC = TextEditingController();
   final passC = TextEditingController();
   String msg = "";
   bool loading = false;
   bool hidePassword = true;
 
-  final Color lancyBlue = const Color(0xFF35B6F3);
-  final Color lancyPurple = const Color(0xFF8339F4);
-  final Color lancyDark = const Color(0xFF121E42);
+  final Color mintCrystal = const Color(0xFF81E38F);
+  final Color skyBlue = const Color(0xFF74C0FC);
+  final Color backgroundLight = const Color(0xFFF9FBFF);
+  final Color darkText = const Color(0xFF1A1C1E);
 
-  // --- LOGIQUE DE CONNEXION ---
+  @override
+  void dispose() {
+    emailC.dispose();
+    passC.dispose();
+    super.dispose();
+  }
+
+  String _cleanError(Object e) {
+    var s = e.toString();
+    if (s.startsWith('Exception: ')) s = s.substring(11);
+    return s;
+  }
+
   Future<void> doLogin() async {
-    if (emailC.text.trim().isEmpty || passC.text.isEmpty) {
-      setState(() => msg = "Veuillez remplir tous les champs");
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     FocusScope.of(context).unfocus();
     setState(() {
@@ -36,93 +48,144 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await AuthService.login(email: emailC.text.trim(), password: passC.text);
+      final data = await AuthService.login(
+        email: emailC.text.trim(),
+        password: passC.text,
+      );
 
-      if (context.mounted) {
-        // NAVIGATION CORRIGÉE : On ne passe plus le token ici
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                HomeScreen(email: emailC.text.trim(), role: 'client'),
-          ),
-        );
+      String email = emailC.text.trim();
+      String role = 'client';
+      String? name;
+      final user = data['user'];
+      if (user is Map) {
+        email = user['email']?.toString() ?? email;
+        role = user['role']?.toString() ?? 'client';
+        name = user['name']?.toString();
       }
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(email: email, role: role, name: name),
+        ),
+      );
     } catch (e) {
-      setState(() {
-        msg = e.toString().contains("401")
-            ? "Email ou mot de passe incorrect"
-            : "Erreur de connexion au serveur";
-      });
+      if (mounted) {
+        setState(() => msg = _cleanError(e));
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
 
-  // --- UI COMPONENTS ---
-  InputDecoration _inputDecoration(
-    String label,
-    IconData icon, {
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: lancyBlue),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: const Color(0xFFF8F9FC),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: BorderSide.none,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(30),
+      backgroundColor: backgroundLight,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new, color: darkText, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 30),
+        child: Form(
+          key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 50),
               Text(
-                "Lancy Admin",
-                style: TextStyle(
+                "Bon retour\nsur Lancy ✨",
+                style: GoogleFonts.poppins(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: lancyDark,
+                  color: darkText,
+                  height: 1.1,
                 ),
               ),
-              const SizedBox(height: 40),
-              TextField(
+              const SizedBox(height: 10),
+              Text(
+                "Connecte-toi pour retrouver tes missions et ton réseau.",
+                style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 15),
+              ),
+              const SizedBox(height: 35),
+              _buildModernField(
                 controller: emailC,
-                decoration: _inputDecoration("Email", Icons.email),
+                hint: "Adresse Email",
+                icon: Icons.alternate_email_rounded,
+                keyboardType: TextInputType.emailAddress,
+                validator: (v) =>
+                    v == null || !v.contains("@") ? "Email invalide" : null,
               ),
               const SizedBox(height: 20),
-              TextField(
+              _buildModernField(
                 controller: passC,
-                obscureText: hidePassword,
-                decoration: _inputDecoration(
-                  "Mot de passe",
-                  Icons.lock,
-                  suffix: IconButton(
-                    icon: Icon(
-                      hidePassword ? Icons.visibility_off : Icons.visibility,
+                hint: "Mot de passe",
+                icon: Icons.lock_outline_rounded,
+                isPassword: true,
+                validator: (v) =>
+                    v == null || v.isEmpty ? "Mot de passe requis" : null,
+              ),
+              if (msg.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  msg,
+                  style: GoogleFonts.inter(
+                    color: Colors.redAccent,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ForgotPasswordScreen(),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    "Mot de passe oublié ?",
+                    style: GoogleFonts.inter(
+                      color: skyBlue,
+                      fontWeight: FontWeight.w600,
                     ),
-                    onPressed: () =>
-                        setState(() => hidePassword = !hidePassword),
                   ),
                 ),
               ),
-              if (msg.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(msg, style: const TextStyle(color: Colors.red)),
+              const SizedBox(height: 8),
+              _buildSubmitButton(),
+              const SizedBox(height: 24),
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ChooseRoleScreen(),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    "Pas encore de compte ? S'inscrire",
+                    style: GoogleFonts.inter(
+                      color: darkText.withValues(alpha: 0.65),
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
                 ),
-              const SizedBox(height: 30),
-              _buildLoginButton(),
+              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -130,30 +193,95 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildLoginButton() {
+  Widget _buildModernField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool isPassword = false,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
     return Container(
-      width: double.infinity,
-      height: 60,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        gradient: LinearGradient(colors: [lancyBlue, lancyPurple]),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: ElevatedButton(
-        onPressed: loading ? null : doLogin,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
+      child: TextFormField(
+        controller: controller,
+        obscureText: isPassword ? hidePassword : false,
+        keyboardType: keyboardType,
+        validator: validator,
+        style: GoogleFonts.inter(color: darkText, fontWeight: FontWeight.w500),
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: Icon(icon, color: skyBlue, size: 22),
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    hidePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: Colors.grey,
+                  ),
+                  onPressed: () =>
+                      setState(() => hidePassword = !hidePassword),
+                )
+              : null,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
         ),
-        child: loading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Text(
-                "Se Connecter",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return InkWell(
+      onTap: loading ? null : doLogin,
+      child: Container(
+        width: double.infinity,
+        height: 60,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [skyBlue, mintCrystal]),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: skyBlue.withValues(alpha: 0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Center(
+          child: loading
+              ? const SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  "SE CONNECTER",
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }

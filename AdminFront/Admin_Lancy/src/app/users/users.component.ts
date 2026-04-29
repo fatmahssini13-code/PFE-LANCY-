@@ -18,7 +18,7 @@ export class UsersComponent implements OnInit {
   }
 
   getUsers() {
-    this.http.get<any[]>('http://localhost:5000/api/admin/users')
+    this.http.get<any[]>('http://localhost:5001/api/admin/users')
       .subscribe(data => {
         this.users = data;
       });

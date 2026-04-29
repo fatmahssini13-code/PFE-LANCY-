@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart'; // Pour la gestion simplifiée des Snackbars et de la navigation
-import 'package:google_fonts/google_fonts.dart'; // Pour une typographie moderne
-import 'package:pfe/service/api_service.dart'; // Service pour communiquer avec Node.js
-import 'otp_verification_screen.dart'; // Écran suivant pour valider l'inscription
+import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:pfe/service/api_service.dart';
+import 'otp_verification_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  final String email; // Email récupéré éventuellement d'une étape précédente
-  final String role;  // Rôle choisi : 'freelancer' ou 'client'
+  final String email;
+  final String role;
 
   const RegisterScreen({super.key, required this.email, required this.role});
 
@@ -15,97 +15,114 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // Clé globale pour valider le formulaire
   final _formKey = GlobalKey<FormState>();
 
-  // Palette de couleurs spécifique à l'identité Lancy
   final Color mintCrystal = const Color(0xFF81E38F);
   final Color skyBlue = const Color(0xFF74C0FC);
   final Color backgroundLight = const Color(0xFFF9FBFF);
   final Color darkText = const Color(0xFF1A1C1E);
 
-  // Contrôleurs de texte pour récupérer les saisies
+  // Controllers
   final nameC = TextEditingController();
   final emailC = TextEditingController();
   final passC = TextEditingController();
   final confirmPassC = TextEditingController();
-  final skillsC = TextEditingController(); // Spécifique Freelancer
-  final bioC = TextEditingController();   // Spécifique Freelancer
-  
-  bool hidePassword = true; // État pour masquer/afficher le mot de passe
+  final bioC = TextEditingController();
+  final specialityC = TextEditingController();
+  final rateC = TextEditingController();
+  final _customSkillCtrl = TextEditingController();
+
+  bool hidePassword = true;
+  bool hideConfirmPassword = true;
   bool loading = false;
+
+  // Compétences
+  final List<String> _predefinedSkills = [
+    'Flutter', 'Node.js', 'React', 'Design UI',
+    'MongoDB', 'Marketing', 'Rédaction', 'Python',
+    'Angular', 'Figma', 'PHP', 'Laravel',
+  ];
+  final List<String> _selectedSkills = [];
+
+  // Langues
+  final List<String> _languages = ['Arabe', 'Français', 'Anglais'];
+  final List<String> _selectedLanguages = [];
 
   @override
   void initState() {
     super.initState();
-    // Pré-remplissage de l'email si passé en paramètre
     emailC.text = widget.email;
   }
 
   @override
   void dispose() {
-    // Nettoyage des contrôleurs pour éviter les fuites de mémoire
     nameC.dispose();
     emailC.dispose();
     passC.dispose();
     confirmPassC.dispose();
-    skillsC.dispose();
     bioC.dispose();
+    specialityC.dispose();
+    rateC.dispose();
+    _customSkillCtrl.dispose();
     super.dispose();
   }
 
-  // --- LOGIQUE D'INSCRIPTION ---
   Future<void> _doRegister() async {
-    // 1. Validation locale du formulaire (champs vides, etc.)
     if (!_formKey.currentState!.validate()) return;
 
-    // 2. Vérification de la correspondance des mots de passe
     if (passC.text != confirmPassC.text) {
       Get.snackbar("Erreur 🌸", "Les mots de passe ne correspondent pas",
-          backgroundColor: Colors.redAccent.withOpacity(0.8), colorText: Colors.white);
+          backgroundColor: Colors.redAccent.withOpacity(0.8),
+          colorText: Colors.white);
       return;
     }
 
-    // Préparation du corps de la requête JSON
+    if (widget.role == "freelancer" && _selectedSkills.isEmpty) {
+      Get.snackbar("Erreur", "Sélectionne au moins une compétence",
+          backgroundColor: Colors.redAccent.withOpacity(0.8),
+          colorText: Colors.white);
+      return;
+    }
+
     Map<String, dynamic> userData = {
       "name": nameC.text.trim(),
-      "email": emailC.text.trim(),
+      "email": emailC.text.trim().toLowerCase(),
       "password": passC.text,
       "role": widget.role,
-      // Ajout des données conditionnelles selon le rôle
-      "skills": widget.role == "freelancer" ? skillsC.text.trim() : "",
       "bio": widget.role == "freelancer" ? bioC.text.trim() : "",
+      "speciality": widget.role == "freelancer" ? specialityC.text.trim() : "",
+      "skills": widget.role == "freelancer" ? _selectedSkills : [],
+      "hourlyRate": widget.role == "freelancer" ? rateC.text.trim() : "",
+      "languages": widget.role == "freelancer" ? _selectedLanguages : [],
     };
 
+    setState(() => loading = true);
     try {
-      // Affichage d'un indicateur de chargement modal
-      Get.dialog(const Center(child: CircularProgressIndicator(color: Colors.white)), barrierDismissible: false);
-
-      // 3. Appel de la méthode statique du service API (Backend Node.js)
       await ApiService.register(userData);
 
       if (!mounted) return;
-      if (Get.isDialogOpen!) Get.back(); // Fermer le chargement
 
-      // 4. Notification de succès et redirection vers l'OTP
       Get.snackbar("Presque fini ! ✨", "Un code de vérification a été envoyé.",
-          backgroundColor: mintCrystal.withOpacity(0.9), colorText: Colors.white);
+          backgroundColor: mintCrystal.withOpacity(0.9),
+          colorText: Colors.white);
 
       Get.to(() => OTPVerificationScreen(
             email: emailC.text.trim(),
-            isFromRegister: true, // Indique qu'on vient de l'inscription
+            isFromRegister: true,
+            role: widget.role,
           ));
-
     } catch (e) {
-      if (Get.isDialogOpen!) Get.back();
+      if (!mounted) return;
       Get.snackbar("Erreur ❌", e.toString().replaceAll("Exception: ", ""),
-          backgroundColor: Colors.redAccent.withOpacity(0.8), colorText: Colors.white);
+          backgroundColor: Colors.redAccent.withOpacity(0.8),
+          colorText: Colors.white);
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Variable pour simplifier l'affichage conditionnel
     bool isFreelancer = widget.role == "freelancer";
 
     return Scaffold(
@@ -126,71 +143,296 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Titre dynamique selon le rôle
+              // Titre
               Text(
                 isFreelancer ? "Join as\nExpert 🌸" : "Start as\nClient ✨",
-                style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.bold, color: darkText, height: 1.1),
+                style: GoogleFonts.poppins(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: darkText,
+                    height: 1.1),
               ),
               const SizedBox(height: 10),
               Text(
                 "Créez votre compte pour commencer l'aventure.",
-                style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 15),
+                style: GoogleFonts.inter(
+                    color: Colors.grey[600], fontSize: 15),
               ),
               const SizedBox(height: 35),
 
-              // Champ : Nom Complet
+              // Nom
               _buildModernField(
                 controller: nameC,
                 hint: "Nom Complet",
                 icon: Icons.person_outline_rounded,
-                validator: (v) => v == null || v.isEmpty ? "Nom requis" : null,
+                validator: (v) =>
+                    v == null || v.isEmpty ? "Nom requis" : null,
               ),
               const SizedBox(height: 20),
 
-              // Champ : Email
+              // Email
               _buildModernField(
                 controller: emailC,
                 hint: "Adresse Email",
                 icon: Icons.alternate_email_rounded,
-                validator: (v) => v == null || !v.contains("@") ? "Email invalide" : null,
+                validator: (v) =>
+                    v == null || !v.contains("@") ? "Email invalide" : null,
               ),
               const SizedBox(height: 20),
 
-              // Champ : Mot de passe
+              // Mot de passe
               _buildModernField(
                 controller: passC,
                 hint: "Mot de passe",
                 icon: Icons.lock_outline_rounded,
                 isPassword: true,
-                validator: (v) => v == null || v.length < 6 ? "Min 6 caractères" : null,
+                hidePass: hidePassword,
+                togglePass: () =>
+                    setState(() => hidePassword = !hidePassword),
+                validator: (v) => v == null || v.length < 6
+                    ? "Minimum 6 caractères"
+                    : null,
               ),
               const SizedBox(height: 20),
 
-              // Champ : Confirmation
+              // Confirmation
               _buildModernField(
                 controller: confirmPassC,
                 hint: "Confirmer le mot de passe",
                 icon: Icons.lock_reset_rounded,
                 isPassword: true,
-                validator: (v) => v != passC.text ? "Mots de passe différents" : null,
+                hidePass: hideConfirmPassword,
+                togglePass: () => setState(
+                    () => hideConfirmPassword = !hideConfirmPassword),
+                validator: (v) =>
+                    v != passC.text ? "Mots de passe différents" : null,
               ),
 
-              // CHAMPS SPÉCIFIQUES AU FREELANCER (Affichage conditionnel)
+              // ===========================
+              // CHAMPS FREELANCER
+              // ===========================
               if (isFreelancer) ...[
-                const SizedBox(height: 20),
+                const SizedBox(height: 28),
+                _sectionDivider("Profil professionnel"),
+                const SizedBox(height: 16),
+
+                // Spécialité
                 _buildModernField(
-                  controller: skillsC,
-                  hint: "Compétences (ex: Flutter, Design)",
-                  icon: Icons.auto_awesome_outlined,
-                  validator: (v) => v == null || v.isEmpty ? "Compétences requises" : null,
+                  controller: specialityC,
+                  hint: "Spécialité (ex: Développeur Flutter)",
+                  icon: Icons.work_outline,
+                  validator: (v) => v == null || v.isEmpty
+                      ? "Spécialité requise"
+                      : null,
                 ),
                 const SizedBox(height: 20),
+
+                // Bio
                 _buildModernField(
                   controller: bioC,
-                  hint: "Biographie courte",
+                  hint: "Biographie courte...",
                   icon: Icons.notes_rounded,
                   maxLines: 3,
-                  validator: (v) => v == null || v.isEmpty ? "Bio requise" : null,
+                  validator: (v) =>
+                      v == null || v.isEmpty ? "Bio requise" : null,
+                ),
+                const SizedBox(height: 20),
+
+                // Taux horaire
+                _buildModernField(
+                  controller: rateC,
+                  hint: "Taux horaire (DT/heure) — optionnel",
+                  icon: Icons.payments_outlined,
+                  type: TextInputType.number,
+                  validator: null,
+                ),
+                const SizedBox(height: 28),
+
+                // Compétences
+                _sectionDivider("Compétences"),
+                const SizedBox(height: 12),
+                Text(
+                  "Sélectionne tes compétences",
+                  style: GoogleFonts.inter(
+                      color: Colors.grey.shade600, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _predefinedSkills.map((skill) {
+                    final isSelected = _selectedSkills.contains(skill);
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedSkills.remove(skill);
+                          } else {
+                            _selectedSkills.add(skill);
+                          }
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? skyBlue.withOpacity(0.15)
+                              : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(99),
+                          border: Border.all(
+                            color: isSelected
+                                ? skyBlue
+                                : Colors.grey.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(skill,
+                                style: GoogleFonts.inter(
+                                    color: isSelected
+                                        ? const Color(0xFF185FA5)
+                                        : Colors.grey.shade700,
+                                    fontSize: 13,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal)),
+                            if (isSelected) ...[
+                              const SizedBox(width: 4),
+                              Icon(Icons.check_circle,
+                                  color: skyBlue, size: 14),
+                            ]
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+
+                // Compétence personnalisée
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _customSkillCtrl,
+                          style: GoogleFonts.inter(fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: "Ajouter une compétence...",
+                            hintStyle: GoogleFonts.inter(
+                                color: Colors.grey.shade400,
+                                fontSize: 14),
+                            prefixIcon: Icon(
+                                Icons.add_circle_outline,
+                                color: skyBlue,
+                                size: 20),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding:
+                                const EdgeInsets.symmetric(
+                                    vertical: 16, horizontal: 16),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () {
+                        final skill = _customSkillCtrl.text.trim();
+                        if (skill.isNotEmpty &&
+                            !_selectedSkills.contains(skill)) {
+                          setState(() {
+                            _selectedSkills.add(skill);
+                            _customSkillCtrl.clear();
+                          });
+                        }
+                      },
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: skyBlue,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.add,
+                            color: Colors.white, size: 24),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+
+                // Langues
+                _sectionDivider("Langues parlées"),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _languages.map((lang) {
+                    final isSelected = _selectedLanguages.contains(lang);
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedLanguages.remove(lang);
+                          } else {
+                            _selectedLanguages.add(lang);
+                          }
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? mintCrystal.withOpacity(0.15)
+                              : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(99),
+                          border: Border.all(
+                            color: isSelected
+                                ? mintCrystal
+                                : Colors.grey.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(lang,
+                                style: GoogleFonts.inter(
+                                    color: isSelected
+                                        ? const Color(0xFF0F6E56)
+                                        : Colors.grey.shade700,
+                                    fontSize: 13,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal)),
+                            if (isSelected) ...[
+                              const SizedBox(width: 4),
+                              Icon(Icons.check_circle,
+                                  color: mintCrystal, size: 14),
+                            ]
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ],
 
@@ -204,13 +446,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // --- WIDGET RÉUTILISABLE POUR LES CHAMPS DE SAISIE ---
+  // Section divider avec titre
+  Widget _sectionDivider(String title) {
+    return Row(
+      children: [
+        Text(title,
+            style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: darkText)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Container(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildModernField({
     required TextEditingController controller,
     required String hint,
     required IconData icon,
     bool isPassword = false,
+    bool? hidePass,
+    VoidCallback? togglePass,
     int maxLines = 1,
+    TextInputType type = TextInputType.text,
     String? Function(String?)? validator,
   }) {
     return Container(
@@ -218,35 +482,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 15,
+              offset: const Offset(0, 8)),
         ],
       ),
       child: TextFormField(
         controller: controller,
-        obscureText: isPassword ? hidePassword : false,
-        maxLines: maxLines,
+        obscureText: isPassword ? (hidePass ?? true) : false,
+        maxLines: isPassword ? 1 : maxLines,
+        keyboardType: type,
         validator: validator,
-        style: GoogleFonts.inter(color: darkText, fontWeight: FontWeight.w500),
+        style: GoogleFonts.inter(
+            color: darkText, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: hint,
           prefixIcon: Icon(icon, color: skyBlue, size: 22),
           suffixIcon: isPassword
               ? IconButton(
-                  icon: Icon(hidePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey),
-                  onPressed: () => setState(() => hidePassword = !hidePassword),
+                  icon: Icon(
+                    (hidePass ?? true)
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: Colors.grey,
+                  ),
+                  onPressed: togglePass,
                 )
               : null,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+              vertical: 20, horizontal: 20),
         ),
       ),
     );
   }
 
-  // --- BOUTON DE SOUMISSION GRADIENT ---
   Widget _buildSubmitButton() {
     return InkWell(
-      onTap: _doRegister,
+      onTap: loading ? null : _doRegister,
       child: Container(
         width: double.infinity,
         height: 60,
@@ -254,14 +531,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
           gradient: LinearGradient(colors: [skyBlue, mintCrystal]),
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(color: skyBlue.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10)),
+            BoxShadow(
+                color: skyBlue.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10)),
           ],
         ),
         child: Center(
-          child: Text(
-            "CRÉER MON COMPTE",
-            style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-          ),
+          child: loading
+              ? const SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.5, color: Colors.white))
+              : Text(
+                  "CRÉER MON COMPTE",
+                  style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.1),
+                ),
         ),
       ),
     );

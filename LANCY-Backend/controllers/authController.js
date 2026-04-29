@@ -16,25 +16,44 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function normalizeEmail(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase();
+}
+
+async function findUserByEmailLoose(emailNorm) {
+  let user = await User.findOne({ email: emailNorm });
+  if (user || !emailNorm) return user;
+  const esc = emailNorm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return User.findOne({ email: { $regex: new RegExp("^" + esc + "$", "i") } });
+}
+
 // --- LOGIQUE D'AUTHENTIFICATION ---
 
 // 1. INSCRIPTION (REGISTER)
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role, skills, bio } = req.body;
+    const { name, password, role, skills, bio } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({ message: "Champs obligatoires manquants" });
     }
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await findUserByEmailLoose(email);
     if (existingUser) {
       return res.status(400).json({ message: "Cet email est déjà utilisé" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
 
-    // Créer l'utilisateur (isVerified: false par défaut)
+  if (!passwordRegex.test(password)) {
+    return res.status(400).json({ 
+      message: "Le mot de passe doit contenir au moins 8 caractères, incluant des lettres, des chiffres et des symboles." 
+    });
+  }
     const user = await User.create({
       name,
       email,
@@ -42,19 +61,18 @@ exports.register = async (req, res) => {
       role,
       skills,
       bio,
-      isVerified: false 
+      isVerified: false,
     });
 
-    // Générer et envoyer l'OTP immédiatement
     const otpCode = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await OTP.create({ email, code: otpCode, expiresAt, verified: false });
     await emailService.sendOTPEmail(email, otpCode);
 
     return res.status(201).json({
       message: "Utilisateur créé. Vérifiez votre email pour le code OTP ✨",
-      email: email
+      email,
     });
   } catch (error) {
     return res.status(500).json({ message: "Erreur serveur", error: error.message });
@@ -64,8 +82,9 @@ exports.register = async (req, res) => {
 // 2. CONNEXION (LOGIN)
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const { password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const user = await findUserByEmailLoose(email);
 
     if (!user) return res.status(401).json({ message: "Identifiants invalides" });
 
@@ -81,7 +100,12 @@ exports.login = async (req, res) => {
     return res.json({
       message: "Connexion réussie",
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role }
+      user: {
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role
+}
     });
   } catch (err) {
     return res.status(500).json({ message: "Erreur serveur", error: String(err) });
@@ -91,8 +115,11 @@ exports.login = async (req, res) => {
 // 3. VÉRIFICATION OTP (VERIFY OTP)
 exports.verifyOTP = async (req, res) => {
   try {
-    const { email, code, isFromRegister } = req.body;
-    
+    const email = normalizeEmail(req.body.email);
+    const code = String(req.body.code || "");
+    const isRegister =
+      req.body.isFromRegister === true || req.body.isFromRegister === "true";
+
     const otpRecord = await OTP.findOne({
       email,
       code,
@@ -104,17 +131,34 @@ exports.verifyOTP = async (req, res) => {
       return res.status(400).json({ message: "Code invalide ou expiré" });
     }
 
-    // Marquer l'OTP comme utilisé/vérifié
-    otpRecord.verified = true;
-    await otpRecord.save();
-
-    // Si c'est pour une inscription, on active le compte
-    if (isFromRegister === true) {
-      await User.findOneAndUpdate({ email }, { isVerified: true });
+    if (isRegister) {
       await OTP.deleteOne({ _id: otpRecord._id });
-      return res.json({ message: "Compte activé avec succès ! 🎉" });
+      const user = await User.findOneAndUpdate(
+        { email },
+        { isVerified: true },
+        { new: true }
+      );
+
+      if (!user) {
+        return res.status(400).json({ message: "Utilisateur introuvable" });
+      }
+
+      const token = signToken(user._id);
+      return res.json({
+        message: "Compte activé avec succès ! 🎉",
+        token,
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      });
     }
 
+    // Mot de passe oublié : garder l’OTP (verified: true) pour l’étape reset-password
+    otpRecord.verified = true;
+    await otpRecord.save();
     return res.json({ message: "Code vérifié avec succès" });
   } catch (err) {
     return res.status(500).json({ message: "Erreur serveur" });
@@ -124,10 +168,10 @@ exports.verifyOTP = async (req, res) => {
 // 4. MOT DE PASSE OUBLIÉ (FORGOT PASSWORD)
 exports.forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = normalizeEmail(req.body.email);
     if (!email) return res.status(400).json({ message: "Email requis" });
 
-    const user = await User.findOne({ email });
+    const user = await findUserByEmailLoose(email);
     if (!user) {
       return res.json({ message: "Si l'email existe, un code a été envoyé" });
     }
@@ -136,7 +180,12 @@ exports.forgotPassword = async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await OTP.deleteMany({ email });
-    await OTP.create({ email, code: otpCode, expiresAt, verified: false });
+    await OTP.create({
+      email,
+      code: otpCode,
+      expiresAt,
+      verified: false,
+    });
 
     await emailService.sendOTPEmail(email, otpCode);
     return res.json({ message: "Code OTP envoyé par email" });
@@ -148,7 +197,8 @@ exports.forgotPassword = async (req, res) => {
 // 5. RÉINITIALISATION (RESET PASSWORD)
 exports.resetPassword = async (req, res) => {
   try {
-    const { email, code, newPassword, confirmPassword } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { code, newPassword, confirmPassword } = req.body;
 
     if (newPassword !== confirmPassword) {
       return res.status(400).json({ message: "Les mots de passe ne correspondent pas" });
@@ -156,7 +206,7 @@ exports.resetPassword = async (req, res) => {
 
     const otpRecord = await OTP.findOne({
       email,
-      code,
+      code: String(code || ""),
       verified: true,
       expiresAt: { $gt: new Date() },
     });

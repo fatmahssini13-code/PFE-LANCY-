@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
-import '../../service/chat_service.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../../service/message_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
   final String receiverId;
   final String receiverName;
+  final String projectId;
 
   const ChatScreen({
     super.key,
     required this.currentUserId,
     required this.receiverId,
     required this.receiverName,
+    required this.projectId,
   });
 
   @override
@@ -18,36 +21,75 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final TextEditingController _messageController = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [];
-  final ChatService _chatService = ChatService();
+  List messages = [];
+  final controller = TextEditingController();
+  final scrollController = ScrollController();
+
+  late IO.Socket socket;
 
   @override
   void initState() {
     super.initState();
-    // Connexion et écoute
-    _chatService.connect(widget.currentUserId, (data) {
+    initSocket();
+    loadMessages();
+  }
+
+  void initSocket() {
+    socket = IO.io("http://192.168.100.13:5001", {
+      "transports": ["websocket"],
+      "autoConnect": true,
+    });
+
+    socket.onConnect((_) {
+      socket.emit("join", widget.currentUserId);
+    });
+
+    socket.on("receive_message", (data) {
       setState(() {
-        _messages.add(data as Map<String, dynamic>);
+        messages.add(data);
       });
+
+      scrollToBottom();
     });
   }
 
-  void _send() {
-    if (_messageController.text.isNotEmpty) {
-      _chatService.sendMessage(
-        widget.currentUserId,
-        widget.receiverId,
-        _messageController.text,
-      );
-      setState(() {
-        _messages.add({
-          'senderId': widget.currentUserId,
-          'message': _messageController.text,
-        });
-      });
-      _messageController.clear();
-    }
+  Future<void> loadMessages() async {
+    final data = await MessageService.getMessages(widget.projectId);
+    setState(() => messages = data);
+  }
+
+  void send() {
+    if (controller.text.trim().isEmpty) return;
+
+    final text = controller.text;
+
+    socket.emit("send_message", {
+      "senderId": widget.currentUserId,
+      "receiverId": widget.receiverId,
+      "projectId": widget.projectId,
+      "text": text,
+    });
+
+    controller.clear();
+  }
+
+  void scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (scrollController.hasClients) {
+        scrollController.animateTo(
+          scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    socket.dispose();
+    controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -58,41 +100,45 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: ListView.builder(
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                bool isMe =
-                    _messages[index]['senderId'] == widget.currentUserId;
+              controller: scrollController,
+              itemCount: messages.length,
+              itemBuilder: (_, i) {
+                final msg = messages[i];
+                final isMe = msg["senderId"] == widget.currentUserId;
+
                 return Align(
-                  alignment: isMe
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
+                  alignment:
+                      isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
+                    margin: const EdgeInsets.all(6),
                     padding: const EdgeInsets.all(10),
-                    margin: const EdgeInsets.symmetric(
-                      vertical: 5,
-                      horizontal: 10,
-                    ),
                     decoration: BoxDecoration(
-                      color: isMe
-                          ? Colors.blue[200]
-                          : Colors.pink[100], // Style un peu girly
-                      borderRadius: BorderRadius.circular(15),
+                      color: isMe ? Colors.blue : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(_messages[index]['message']),
+                    child: Text(msg["text"] ?? ""),
                   ),
                 );
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(child: TextField(controller: _messageController)),
-                IconButton(icon: const Icon(Icons.send), onPressed: _send),
-              ],
-            ),
-          ),
+
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    hintText: "Message...",
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.send),
+                onPressed: send,
+              )
+            ],
+          )
         ],
       ),
     );

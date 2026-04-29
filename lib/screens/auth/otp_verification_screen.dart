@@ -7,11 +7,14 @@ import 'package:pfe/screens/home.dart'; // Destination si "Inscription réussie"
 class OTPVerificationScreen extends StatefulWidget {
   final String email; // Email pour lequel on vérifie le code
   final bool isFromRegister; // Flag pour savoir si on vient de Register ou de ForgotPassword
+  /// Rôle choisi à l’inscription (`client` / `freelancer`) — requis pour afficher la bonne liste sur l’accueil.
+  final String role;
 
   const OTPVerificationScreen({
-    super.key, 
-    required this.email, 
+    super.key,
+    required this.email,
     required this.isFromRegister,
+    this.role = '',
   });
 
   @override
@@ -86,8 +89,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     try {
       // Appel du service AuthService
       await AuthService.verifyOTP(
-        email: widget.email, 
-        code: code, 
+        email: widget.email,
+        code: code,
         isFromRegister: widget.isFromRegister,
       );
 
@@ -95,10 +98,19 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
       // LOGIQUE DE REDIRECTION CONDITIONNELLE
       if (widget.isFromRegister) {
-        // Cas 1: Inscription -> Compte activé -> Go Home (vide l'historique de navigation)
+        final savedEmail = await AuthService.getUserEmail();
+        final savedRole = await AuthService.getUserRole();
+        final savedName = await AuthService.getUserName();
+        if (!mounted) return;
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => HomeScreen(email: widget.email, role: "")),
+          MaterialPageRoute(
+            builder: (_) => HomeScreen(
+              email: savedEmail ?? widget.email.trim().toLowerCase(),
+              role: savedRole ?? widget.role,
+              name: savedName,
+            ),
+          ),
           (route) => false,
         );
         ScaffoldMessenger.of(context).showSnackBar(

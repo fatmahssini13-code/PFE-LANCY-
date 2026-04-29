@@ -42,6 +42,10 @@ dependencies:
   shared_preferences: ^2.5.4
   socket_io_client: ^3.1.4
 
+  device_info_plus: ^12.4.0
+  image_picker: ^1.2.1
+  intl: ^0.20.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -96,3 +100,5 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 google_fonts: ^6.1.0
 
+images_picker: ^1.0.7
+http_parser: ^4.0.2
