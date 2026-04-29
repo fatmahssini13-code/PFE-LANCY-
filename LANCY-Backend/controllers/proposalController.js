@@ -2,6 +2,8 @@ const Proposal = require("../models/proposal");
 const Project = require("../models/project");
 const Notification = require("../models/notification");
 const Conversation = require("../models/conversation");
+const Wallet = require("../models/Wallet");
+const Transaction = require("../models/Transaction");
 
 // =======================
 // CREATE PROPOSAL
@@ -63,43 +65,41 @@ const getProjectProposals = async (req, res) => {
 };
 
 // =======================
-// ACCEPT PROPOSAL
+// ACCEPT PROPOSAL (ESCROW)
 // =======================
 const acceptProposal = async (req, res) => {
   try {
-    const proposal = await Proposal.findById(req.params.id);
-    if (!proposal)
-      return res.status(404).json({ message: "Proposal not found" });
+    const proposal = await Proposal.findById(req.params.id).populate("project");
+
+    const clientId = proposal.project.owner;
+    const freelancerId = proposal.freelancer;
+
+    const clientWallet = await Wallet.findOne({ userId: clientId });
+
+    if (!clientWallet || clientWallet.balance < proposal.price) {
+      return res.status(400).json({ message: "Solde insuffisant ❌" });
+    }
+
+    clientWallet.balance -= proposal.price;
+    await clientWallet.save();
+
+    await Transaction.create({
+      from: clientId,
+      to: "ESCROW",
+      amount: proposal.price,
+      type: "escrow",
+    });
 
     proposal.status = "accepted";
     await proposal.save();
 
-    const project = await Project.findById(proposal.project);
-
-    project.acceptedFreelancer = proposal.freelancer;
-    project.status = "accepted";
+    const project = await Project.findById(proposal.project._id);
+    project.status = "in_progress";
+    project.escrowAmount = proposal.price;
+    project.freelancer = freelancerId;
     await project.save();
 
-    // create conversation
-    let conversation = await Conversation.findOne({
-      project: project._id,
-    });
-
-    if (!conversation) {
-      conversation = await Conversation.create({
-        participants: [
-          project.owner.toString(),
-          proposal.freelancer.toString(),
-        ],
-        project: project._id,
-      });
-    }
-
-    res.json({
-      message: "Accepted",
-      conversation,
-      project,
-    });
+    res.json({ message: "Projet démarré 💰 escrow activé" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -122,7 +122,9 @@ const rejectProposal = async (req, res) => {
   }
 };
 
-// ✅ EXPORT FIXED (IMPORTANT)
+// =======================
+// EXPORT
+// =======================
 module.exports = {
   createProposal,
   getProjectProposals,

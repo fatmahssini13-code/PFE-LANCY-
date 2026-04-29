@@ -111,6 +111,8 @@ app.use("/uploads", express.static("uploads"));
 const PORT = Number(process.env.PORT) || 5001;
 const MY_IP = "192.168.100.13"; 
 //const MY_IP = "192.168.1.100"; 
+const paymentRoutes = require("./routes/paymentRoutes");
+app.use("/api/payment", paymentRoutes);
 
 connectDB()
     .then(() => {

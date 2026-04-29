@@ -4,8 +4,10 @@ import 'package:pfe/config/api_config.dart';
 import 'auth_service.dart';
 
 class ProjectService {
-  
-  // --- CRÉER UN PROJET ---
+
+  // ===============================
+  // 🟢 CREATE PROJECT
+  // ===============================
   Future<bool> createProject(
     String title,
     String description,
@@ -13,10 +15,9 @@ class ProjectService {
     String email,
   ) async {
     try {
-      // Correction ici : On appelle AuthService.getToken()
       String? token = await AuthService.getToken();
 
-      final response = await http.post(
+      final res = await http.post(
         Uri.parse("${ApiConfig.baseURL}/projects/add"),
         headers: {
           "Content-Type": "application/json",
@@ -30,22 +31,22 @@ class ProjectService {
         }),
       );
 
-      return response.statusCode == 201;
+      print("CREATE STATUS: ${res.statusCode}");
+      return res.statusCode == 201;
     } catch (e) {
-      print("❌ ERROR CREATE: $e");
+      print("❌ CREATE ERROR: $e");
       return false;
     }
   }
 
-  // --- MODIFIER UN PROJET ---
-  // On enlève "static" pour rester cohérent avec createProject, 
-  // ou on le garde si tu veux l'appeler sans instancier la classe.
+  // ===============================
+  // 🟡 UPDATE PROJECT
+  // ===============================
   static Future<void> updateProject(String id, Map<String, dynamic> data) async {
-    final token = await AuthService.getToken(); // Correction ici
-    final url = Uri.parse("${ApiConfig.baseURL}/projects/update/$id");
+    final token = await AuthService.getToken();
 
     final res = await http.put(
-      url,
+      Uri.parse("${ApiConfig.baseURL}/projects/update/$id"),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token",
@@ -54,25 +55,98 @@ class ProjectService {
     );
 
     if (res.statusCode != 200) {
-      final errorBody = jsonDecode(res.body);
-      throw Exception(errorBody["message"] ?? "Échec de la modification");
+      throw Exception(jsonDecode(res.body)["message"]);
     }
   }
 
-  // --- SUPPRIMER UN PROJET ---
+  // ===============================
+  // 🔴 DELETE PROJECT
+  // ===============================
   static Future<void> deleteProject(String id) async {
-    final token = await AuthService.getToken(); // Correction ici
-    final url = Uri.parse("${ApiConfig.baseURL}/projects/delete/$id");
+    final token = await AuthService.getToken();
 
     final res = await http.delete(
-      url,
+      Uri.parse("${ApiConfig.baseURL}/projects/delete/$id"),
       headers: {
         "Authorization": "Bearer $token",
       },
     );
 
     if (res.statusCode != 200) {
-      throw Exception("Échec de la suppression");
+      throw Exception("Delete error");
+    }
+  }
+
+  // ===============================
+  // 💰 ACCEPT PROPOSAL
+  // ===============================
+  Future<bool> acceptProposal(String proposalId) async {
+    try {
+      final token = await AuthService.getToken();
+
+      final res = await http.put(
+        Uri.parse("${ApiConfig.baseURL}/proposals/$proposalId/accept"),
+        headers: {
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      print("ACCEPT STATUS: ${res.statusCode}");
+      return res.statusCode == 200;
+    } catch (e) {
+      print("❌ ACCEPT ERROR: $e");
+      return false;
+    }
+  }
+
+  // ===============================
+  // 📦 DELIVER WORK
+  // ===============================
+  Future<bool> deliverProject(
+    String projectId,
+    String message,
+  ) async {
+    try {
+      final token = await AuthService.getToken();
+
+      final res = await http.put(
+        Uri.parse("${ApiConfig.baseURL}/projects/$projectId/deliver"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode({
+          "message": message,
+        }),
+      );
+
+      print("DELIVER STATUS: ${res.statusCode}");
+      return res.statusCode == 200;
+    } catch (e) {
+      print("❌ DELIVER ERROR: $e");
+      return false;
+    }
+  }
+
+  // ===============================
+  // 💸 RELEASE PAYMENT
+  // ===============================
+  Future<bool> releasePayment(String projectId) async {
+    try {
+      final token = await AuthService.getToken();
+
+      final res = await http.put(
+        Uri.parse("${ApiConfig.baseURL}/payment/$projectId/release"),
+        headers: {
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      print("RELEASE STATUS: ${res.statusCode}");
+      return res.statusCode == 200;
+    } catch (e) {
+      print("❌ RELEASE ERROR: $e");
+      return false;
     }
   }
 }

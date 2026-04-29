@@ -20,4 +20,17 @@ private projectUrl = 'http://localhost:5001/api/projects';
 deleteProject(id: string) {
   return this.http.delete(`http://localhost:5001/api/projects/${id}`);
 }
+getEscrowProjects() {
+    return this.http.get<any[]>(`${this.apiUrl}/projects/escrow`);
+  }
+
+  // Action : Libérer les fonds au freelancer
+  releaseFunds(projectId: string) {
+    return this.http.post(`${this.apiUrl}/escrow/release`, { projectId });
+  }
+
+  // Action : Rembourser le client
+  refundClient(projectId: string) {
+    return this.http.post(`${this.apiUrl}/escrow/refund`, { projectId });
+  }
 }

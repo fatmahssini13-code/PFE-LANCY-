@@ -1,0 +1,36 @@
+<div class="container mt-4">
+  <h2 class="mb-4">🛡️ Arbitrage Escrow (Tiers de confiance)</h2>
+
+  <div class="card shadow-sm">
+    <table class="table table-hover align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Projet</th>
+          <th>Client</th>
+          <th>Montant</th>
+          <th>Statut</th>
+          <th class="text-center">Actions d'Arbitrage</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr *ngFor="let p of projects">
+  <td><strong>{{ p.title }}</strong></td>
+  
+  <td>{{ p.clientId?.name || 'Pas de client' }}</td>
+  
+  <td><span class="badge bg-success">{{ p.budget }} DT</span></td>
+  <td><span class="badge bg-warning">Bloqué en Escrow</span></td>
+  
+  <td class="text-center">
+    <button class="btn btn-primary" (click)="onRelease(p._id)">Libérer 💸</button>
+    <button class="btn btn-outline-danger" (click)="onRefund(p._id)">Rembourser ↩️</button>
+  </td>
+</tr>
+      </tbody>
+    </table>
+    
+    <div *ngIf="projects.length === 0" class="text-center p-5 text-muted">
+      Aucun litige ou projet en attente d'arbitrage.
+    </div>
+  </div>
+</div>

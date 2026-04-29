@@ -3,8 +3,9 @@ import 'package:flutter/foundation.dart';
 
 class ApiConfig {
   // 1. Ton IP fixe (PC) et le port de ton serveur Node.js
-  static const String _lanDevHost = '192.168.100.13';
+  // static const String _lanDevHost = '192.168.100.13';
   //static const String _lanDevHost = '192.168.1.100';
+  static const String _lanDevHost = '10.152.12.126';
   static const int apiPort = 5001; 
 
   static String _host = '127.0.0.1';

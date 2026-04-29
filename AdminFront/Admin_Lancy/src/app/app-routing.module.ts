@@ -4,6 +4,7 @@ import { LoginComponent } from './modules/auth/login/login.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
 import { UsersComponent } from './users/users.component';
 import { ProjectsComponent } from './projects/projects.component';
+import { EscrowManagementComponent } from './escrow-management/escrow-management.component';
 
 const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -11,6 +12,7 @@ const routes: Routes = [
   { path: 'dashboard', component: DashboardComponent }, 
   { path: 'users', component: UsersComponent },
     { path: 'projects', component: ProjectsComponent },
+    {path:'escrow-management',component:EscrowManagementComponent},
  //Redirection par défaut si besoin
  { path: '', redirectTo: '/login', pathMatch: 'full' }
 ];

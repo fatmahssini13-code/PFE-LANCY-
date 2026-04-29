@@ -102,6 +102,19 @@ exports.deleteProject = async (req, res) => {
     res.status(500).json({ message: "Erreur suppression", error });
   }
 };
+exports.deliverProject = async (req, res) => {
+  const project = await Project.findById(req.params.id);
+
+  project.status = "delivered";
+  project.delivery = {
+    message: req.body.message,
+    file: req.body.file
+  };
+
+  await project.save();
+
+  res.json({ message: "Travail livré ✅" });
+};
 // Dans ton controller Node.js (projectController.js)
 const addProject = async (req, res) => {
     try {

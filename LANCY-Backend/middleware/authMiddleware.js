@@ -27,5 +27,13 @@ const requireAuth = async (req, res, next) => {
     return res.status(401).json({ message: "Invalid token" });
   }
 };
-
+const isAdmin = (req, res, next) => {
+  // On vérifie si req.user existe (rempli par requireAuth) et si son rôle est admin
+  if (req.user && req.user.role === 'admin') {
+    next(); // L'utilisateur est admin, on passe à la suite
+  } else {
+    // Si l'utilisateur n'est pas admin, on bloque l'accès
+    res.status(403).json({ message: "Accès refusé : Privilèges administrateur requis." });
+  }
+};
 module.exports = { requireAuth };

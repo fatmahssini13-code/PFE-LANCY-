@@ -1,0 +1,96 @@
+/* Conteneur principal */
+.container {
+  padding: 30px;
+  background: #f4f7fe;
+  min-height: 100vh;
+}
+
+h2 {
+  color: #2d3748;
+  font-weight: 800;
+  margin-bottom: 25px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Style de la Carte */
+.card {
+  background: white;
+  border-radius: 20px;
+  border: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+/* Tableau */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-dark {
+  background-color: #2d3748;
+  color: white;
+}
+
+.table th {
+  padding: 15px;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.table td {
+  padding: 20px 15px;
+  border-bottom: 1px solid #edf2f7;
+  vertical-align: middle;
+}
+
+/* Badges */
+.badge {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.bg-success {
+  background: #e6fffa;
+  color: #319795;
+}
+
+.bg-warning {
+  background: #fffaf0;
+  color: #dd6b20;
+}
+
+/* Boutons */
+.btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.btn-primary {
+  background: #8E2DE2;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #4A00E0;
+}
+
+.btn-outline-danger {
+  background: #fff5f5;
+  color: #e53e3e;
+  border: 1px solid #feb2b2;
+}
+
+.btn-outline-danger:hover {
+  background: #e53e3e;
+  color: white;
+}

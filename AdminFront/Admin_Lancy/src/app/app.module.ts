@@ -8,13 +8,15 @@ import { LoginComponent } from './modules/auth/login/login.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
 import { UsersComponent } from './users/users.component';
 import { ProjectsComponent } from './projects/projects.component';
+import { EscrowManagementComponent } from './escrow-management/escrow-management.component';
 @NgModule({
   declarations: [
     AppComponent,
     LoginComponent,
     DashboardComponent,
     UsersComponent,
-    ProjectsComponent
+    ProjectsComponent,
+    EscrowManagementComponent
   ],
   imports: [
     BrowserModule,

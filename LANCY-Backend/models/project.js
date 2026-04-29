@@ -8,7 +8,20 @@ const projectSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
-  }
+  },
+  status: { 
+    type: String, 
+    enum: ["open", "in_progress", "completed", "cancelled"], 
+    default: "open" 
+  },
+  paymentStatus: { 
+    type: String, 
+    enum: ["unpaid", "escrow_locked", "released", "refunded"], 
+    default: "unpaid" 
+  },
+  selectedProposal: { type: mongoose.Schema.Types.ObjectId, ref: "Proposal" }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Project', projectSchema);
+
+
+module.exports = mongoose.models.Project || mongoose.model('Project', projectSchema);
