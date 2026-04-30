@@ -1,4 +1,5 @@
 const Project = require("../models/project");
+const Proposal = require("../models/proposal");
 const User = require("../models/user");
 
 // --- 1. CRÉER UN PROJET (C'est ici que l'erreur se produisait) ---
@@ -51,12 +52,38 @@ exports.getAllProjects = async (req, res) => {
 // --- 2. RÉCUPÉRER TOUS LES PROJETS (Admin ou Freelancer) ---
 exports.getProjects = async (req, res) => {
   try {
-    // .populate('owner') permet de récupérer le nom et l'avatar du client
     const projects = await Project.find()
-      .populate('owner', 'name avatar email')
+      .populate("owner", "name avatar email")
       .sort({ createdAt: -1 });
-      
-    res.status(200).json(projects);
+
+    let enriched = projects.map((p) => p.toObject());
+
+    if (req.user) {
+      const ids = enriched.map((p) => p._id);
+      const mine = await Proposal.find({
+        freelancer: req.user._id,
+        project: { $in: ids },
+      })
+        .select("project status")
+        .lean();
+
+      const statusByProject = {};
+      for (const row of mine) {
+        statusByProject[row.project.toString()] = row.status;
+      }
+
+      enriched = enriched.map((p) => ({
+        ...p,
+        userProposalStatus: statusByProject[p._id.toString()] || "none",
+      }));
+    } else {
+      enriched = enriched.map((p) => ({
+        ...p,
+        userProposalStatus: "none",
+      }));
+    }
+
+    res.status(200).json(enriched);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

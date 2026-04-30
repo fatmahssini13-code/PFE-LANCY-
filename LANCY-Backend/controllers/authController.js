@@ -29,6 +29,24 @@ async function findUserByEmailLoose(emailNorm) {
   return User.findOne({ email: { $regex: new RegExp("^" + esc + "$", "i") } });
 }
 
+// --- SESSION / PROFIL (token valide) ---
+exports.profile = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ message: "Non authentifié" });
+    }
+    return res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
 // --- LOGIQUE D'AUTHENTIFICATION ---
 
 // 1. INSCRIPTION (REGISTER)

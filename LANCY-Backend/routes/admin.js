@@ -3,7 +3,6 @@ const router = express.Router();
 const User = require('../models/User'); 
 const Project = require('../models/Project');
 
-const escrowController = require('../controllers/escrowController');
 const userController = require('../controllers/usercontroller');
 const projectController = require('../controllers/projectController');
 const adminController = require('../controllers/adminController');
@@ -36,8 +35,7 @@ router.get('/projects', projectController.getAllProjectsAdmin);
 
 // --- ROUTE 4 : ACTIONS ESCROW (Nouveau !) ---
 // Ces routes correspondent aux actions du site Angular
-router.get('/escrow-projects', escrowController.getEscrowProjects);
-router.post('/release-funds', escrowController.releaseFunds);
-router.post('/refund-client', escrowController.refundClient);
-module.exports = router;
+router.get('/escrow-projects', adminController.getEscrowProjects);
+router.post('/release-funds', adminController.releaseFunds);
+router.post('/refund-client', adminController.refundClient);
 module.exports = router;

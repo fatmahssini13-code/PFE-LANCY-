@@ -25,58 +25,123 @@ app.use("/api/notifications", notificationRoutes);
 // ... (haut du fichier inchangé jusqu'à app.set)
 
 // 2. LOGIQUE SOCKET.IO (MESSENGER & NOTIFICATIONS)
+
+function strId(v) {
+  if (v === undefined || v === null) return "";
+  return typeof v === "string" ? v : String(v);
+}
+
+function chatRoom(projectId) {
+  return `chat:${strId(projectId)}`;
+}
+
 io.on('connection', (socket) => {
     console.log('Client connecté:', socket.id);
 
-    // L'utilisateur rejoint sa room dès qu'il se connecte
     socket.on('join', (userId) => {
-        if (userId) {
-            socket.join(userId);
-            console.log(`✅ Utilisateur ${userId} a rejoint sa room de notifications`);
+        const id = strId(userId);
+        if (id) {
+            socket.join(id);
+            console.log(`✅ Room utilisateur ${id} (notif / ciblage)`);
         }
     });
 
-    // Gestion des messages (Messenger)
-socket.on('send_message', async (data) => {
-    const { senderId, receiverId, text, projectId } = data;
+    /** Les deux interlocuteurs rejoignent cette room pendant l’écran chat. */
+    socket.on('join_project_chat', (payload = {}) => {
+        const userId = strId(payload.userId);
+        const projectId = strId(payload.projectId);
+        if (!projectId) return;
+        socket.join(chatRoom(projectId));
+        if (userId) socket.join(userId);
+        console.log(`✅ Room chat ${chatRoom(projectId)} user=${userId || "?"}`);
+    });
 
-    try {
-        const newMessage = new Message({
-            senderId,
-            receiverId,
-            projectId,
-            text,
-        });
+    socket.on('leave_project_chat', (payload = {}) => {
+        const projectId = strId(payload.projectId);
+        if (!projectId) return;
+        socket.leave(chatRoom(projectId));
+    });
 
-        await newMessage.save();
+    socket.on('send_message', async (data = {}) => {
+        const senderId = strId(data.senderId);
+        const receiverId = strId(data.receiverId);
+        const projectId = strId(data.projectId);
+        const text = typeof data.text === "string" ? data.text.trim() : "";
 
-        // ✔ ENVOI PROPRE SOCKET
-        const msg = {
-            _id: newMessage._id,
-            senderId,
-            receiverId,
-            projectId,
-            text,
-            createdAt: newMessage.createdAt
-        };
+        if (!senderId || !receiverId || !projectId || !text) {
+            socket.emit("message_error", { message: "Données invalides" });
+            return;
+        }
 
-        io.to(receiverId).emit("receive_message", msg);
-        io.to(senderId).emit("receive_message", msg); // sync sender aussi
-io.to(receiverId).emit("notification", {
-    title: "Nouveau message",
-    message: text,
-    projectId,
-    senderId
-});
-    } catch (err) {
-        console.error("Erreur envoi message:", err);
-    }
-});
-    // UN SEUL disconnect, et BIEN PLACÉ à l'intérieur du bloc connection
+        /** même room utilisée pour le broadcast — garantit avant DB que cet émetteur reçoit l’écho. */
+        const room = chatRoom(projectId);
+        socket.join(room);
+
+        try {
+            const project = await Project.findById(projectId).lean();
+            if (!project || !project.acceptedFreelancer) {
+                socket.emit("message_error", {
+                    message: "Chat non autorisé pour ce projet",
+                });
+                return;
+            }
+
+            const ownerStr = strId(project.owner);
+            const freeStr = strId(project.acceptedFreelancer);
+            const allowed = new Set([ownerStr, freeStr]);
+
+            if (
+                !allowed.has(senderId) ||
+                !allowed.has(receiverId) ||
+                senderId === receiverId
+            ) {
+                socket.emit("message_error", {
+                    message: "Interlocuteurs invalides pour ce projet",
+                });
+                return;
+            }
+
+            const newMessage = await Message.create({
+                senderId,
+                receiverId,
+                projectId,
+                text,
+            });
+
+            const msg = {
+                _id: strId(newMessage._id),
+                senderId,
+                receiverId,
+                projectId,
+                text,
+                createdAt: newMessage.createdAt,
+            };
+
+            /**
+             * Tous les clients dans cette mission (dont l’expéditeur désormais join).
+             * + émission directe sur ce socket au cas où (latence join vs broadcast rare).
+             */
+            io.to(room).emit("receive_message", msg);
+            socket.emit("receive_message", msg);
+
+            io.to(receiverId).emit("notification", {
+                title: "Nouveau message",
+                message: text.length > 80 ? `${text.slice(0, 80)}…` : text,
+                projectId,
+                senderId,
+            });
+        } catch (err) {
+            console.error("Erreur envoi message:", err);
+            socket.emit("message_error", {
+                message: err.message || "Erreur serveur",
+            });
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('Client déconnecté ❌');
     });
-}); // <--- La fermeture correcte de io.on est ici
+});
 
 // 3. IMPORTATION DES ROUTES
 // ... (le reste de ton code est correct)

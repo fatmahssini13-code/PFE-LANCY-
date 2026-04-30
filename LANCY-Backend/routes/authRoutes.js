@@ -1,8 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/authController");
+const { requireAuth } = require("../middleware/authMiddleware");
 
 // --- ROUTES D'AUTHENTIFICATION ---
+
+// Profil courant (JWT) — utilisé par l'app mobile au redémarrage pour valider la session
+router.get("/profile", requireAuth, authController.profile);
 
 // Inscription (Register) : Crée l'utilisateur (isVerified: false) et envoie l'OTP
 router.post("/register", authController.register);

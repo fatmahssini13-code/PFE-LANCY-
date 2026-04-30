@@ -4,13 +4,14 @@ const router = express.Router();
 const Project = require("../models/project");
 const User = require("../models/User");
 const Proposal = require("../models/proposal");
-const { requireAuth } = require("../middleware/authMiddleware");
+const { requireAuth, optionalAuth } = require("../middleware/authMiddleware");
 
-// ✅ IMPORT لازم يكون في الأعلى
-const {
-  deliverProject
-} = require("../controllers/projectController");
+const projectController = require("../controllers/projectController");
 
+// =======================
+// LIST ALL PROJECTS (freelancer missions / marketplace)
+// =======================
+router.get("/", optionalAuth, projectController.getProjects);
 
 // =======================
 // ADD PROJECT
@@ -50,7 +51,10 @@ router.post("/add", requireAuth, async (req, res) => {
 // =======================
 router.get("/my", requireAuth, async (req, res) => {
   try {
-    const projects = await Project.find({ owner: req.user._id });
+    const projects = await Project.find({ owner: req.user._id })
+      .populate("acceptedFreelancer", "name email")
+      .populate("owner", "name email")
+      .sort({ createdAt: -1 });
     res.json(projects);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -61,6 +65,6 @@ router.get("/my", requireAuth, async (req, res) => {
 // =======================
 // DELIVER PROJECT
 // =======================
-router.put("/:id/deliver", requireAuth, deliverProject);
+router.put("/:id/deliver", requireAuth, projectController.deliverProject);
 
 module.exports = router;

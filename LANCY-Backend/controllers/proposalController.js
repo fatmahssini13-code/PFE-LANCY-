@@ -54,6 +54,14 @@ const createProposal = async (req, res) => {
 // =======================
 const getProjectProposals = async (req, res) => {
   try {
+    const projectDoc = await Project.findById(req.params.id);
+    if (!projectDoc) {
+      return res.status(404).json({ message: "Projet introuvable" });
+    }
+    if (projectDoc.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Non autorisé" });
+    }
+
     const proposals = await Proposal.find({ project: req.params.id })
       .populate("freelancer", "name email")
       .populate("project");
@@ -71,12 +79,37 @@ const acceptProposal = async (req, res) => {
   try {
     const proposal = await Proposal.findById(req.params.id).populate("project");
 
-    const clientId = proposal.project.owner;
-    const freelancerId = proposal.freelancer;
+    if (!proposal || !proposal.project) {
+      return res.status(404).json({ message: "Proposition introuvable" });
+    }
 
-    const clientWallet = await Wallet.findOne({ userId: clientId });
+    const projectRef = proposal.project;
+    const ownerId =
+      projectRef.owner?._id?.toString?.() ?? projectRef.owner?.toString();
 
-    if (!clientWallet || clientWallet.balance < proposal.price) {
+    if (!ownerId || ownerId !== req.user._id.toString()) {
+      return res
+        .status(403)
+        .json({ message: "Action réservée au client propriétaire" });
+    }
+
+    if (proposal.status !== "pending") {
+      return res.status(400).json({ message: "Proposition déjà traitée" });
+    }
+
+    const clientId = projectRef.owner;
+    const freelancerId =
+      proposal.freelancer?._id ?? proposal.freelancer;
+
+    let clientWallet = await Wallet.findOne({ userId: clientId });
+    if (!clientWallet) {
+      clientWallet = await Wallet.create({
+        userId: clientId,
+        balance: 1000,
+      });
+    }
+
+    if (clientWallet.balance < proposal.price) {
       return res.status(400).json({ message: "Solde insuffisant ❌" });
     }
 
@@ -93,11 +126,16 @@ const acceptProposal = async (req, res) => {
     proposal.status = "accepted";
     await proposal.save();
 
-    const project = await Project.findById(proposal.project._id);
-    project.status = "in_progress";
-    project.escrowAmount = proposal.price;
-    project.freelancer = freelancerId;
-    await project.save();
+    const projectDoc = await Project.findById(projectRef._id);
+    if (!projectDoc) {
+      return res.status(404).json({ message: "Projet introuvable" });
+    }
+
+    projectDoc.status = "in_progress";
+    projectDoc.escrowAmount = proposal.price;
+    projectDoc.acceptedFreelancer = freelancerId;
+    projectDoc.selectedProposal = proposal._id;
+    await projectDoc.save();
 
     res.json({ message: "Projet démarré 💰 escrow activé" });
   } catch (err) {
@@ -110,13 +148,30 @@ const acceptProposal = async (req, res) => {
 // =======================
 const rejectProposal = async (req, res) => {
   try {
-    const proposal = await Proposal.findByIdAndUpdate(
-      req.params.id,
-      { status: "rejected" },
-      { new: true }
-    );
+    const proposal = await Proposal.findById(req.params.id).populate("project");
 
-    res.json({ message: "Refused", proposal });
+    if (!proposal || !proposal.project) {
+      return res.status(404).json({ message: "Proposition introuvable" });
+    }
+
+    const ownerId =
+      proposal.project.owner?._id?.toString?.() ??
+      proposal.project.owner?.toString();
+
+    if (!ownerId || ownerId !== req.user._id.toString()) {
+      return res
+        .status(403)
+        .json({ message: "Action réservée au client propriétaire" });
+    }
+
+    if (proposal.status !== "pending") {
+      return res.status(400).json({ message: "Proposition déjà traitée" });
+    }
+
+    proposal.status = "rejected";
+    await proposal.save();
+
+    res.json({ message: "Proposition refusée", proposal });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

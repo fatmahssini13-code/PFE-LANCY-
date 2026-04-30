@@ -19,7 +19,14 @@ const projectSchema = new mongoose.Schema({
     enum: ["unpaid", "escrow_locked", "released", "refunded"], 
     default: "unpaid" 
   },
-  selectedProposal: { type: mongoose.Schema.Types.ObjectId, ref: "Proposal" }
+  selectedProposal: { type: mongoose.Schema.Types.ObjectId, ref: "Proposal" },
+  /** Freelance retenu après acceptation d’une proposition */
+  acceptedFreelancer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+  },
+  escrowAmount: { type: Number, default: 0 },
 }, { timestamps: true });
 
 
