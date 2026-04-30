@@ -33,10 +33,22 @@ class ProjectDetailScreen extends StatelessWidget {
     final String description =
         project["description"] ?? "Aucune description";
     final String budget = "${project["budget"] ?? 0} DT";
+    final String proposalStatus =
+        project["userProposalStatus"]?.toString() ?? "none";
+    final bool isRejected = proposalStatus == "rejected";
+    final bool hasActiveProposal =
+        proposalStatus == "pending" || proposalStatus == "accepted";
+    final bool canApply = !isRejected && !hasActiveProposal;
+    final int clientBudgetNum = () {
+      final b = project["budget"];
+      if (b == null) return 0;
+      if (b is int) return b;
+      if (b is num) return b.round();
+      return int.tryParse(b.toString()) ?? 0;
+    }();
     final String status = project["status"] ?? "open";
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
       body: CustomScrollView(
         slivers: [
           // ✅ Header avec gradient
@@ -286,24 +298,45 @@ class ProjectDetailScreen extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15)),
                         elevation: 4,
+                        disabledBackgroundColor: Colors.grey.shade400,
                       ),
-                      onPressed: () async {
-                        final token = await AuthService.getToken();
-                        if (token == null) {
-                          Get.snackbar(
-                              "Erreur", "Veuillez vous reconnecter");
-                          return;
-                        }
-                        Get.to(() => SendProposalScreen(
-                              projectId: project["_id"],
-                              projectTitle: title,
-                              token: token,
-                            ));
-                      },
+                      onPressed: canApply
+                          ? () async {
+                              final token = await AuthService.getToken();
+                              if (token == null) {
+                                Get.snackbar(
+                                    "Erreur", "Veuillez vous reconnecter");
+                                return;
+                              }
+                              final sent = await Get.to<bool>(
+                                () => SendProposalScreen(
+                                  projectId:
+                                      project["_id"].toString(),
+                                  projectTitle: title,
+                                  token: token,
+                                  clientBudget: clientBudgetNum,
+                                ),
+                              );
+                              if (!context.mounted) return;
+                              if (sent == true) {
+                                final m =
+                                    Map<String, dynamic>.from(project as Map);
+                                m["userProposalStatus"] = "pending";
+                                Get.off(
+                                  () =>
+                                      ProjectDetailScreen(project: m),
+                                );
+                              }
+                            }
+                          : null,
                       child: Ink(
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                              colors: [skyBlue, lancyPurple]),
+                          gradient: canApply
+                              ? LinearGradient(
+                                  colors: [skyBlue, lancyPurple])
+                              : null,
+                          color:
+                              canApply ? null : Colors.grey.shade400,
                           borderRadius: BorderRadius.circular(15),
                         ),
                         child: Container(
@@ -312,11 +345,20 @@ class ProjectDetailScreen extends StatelessWidget {
                             mainAxisAlignment:
                                 MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.send_outlined,
-                                  color: Colors.white, size: 20),
+                              Icon(
+                                canApply
+                                    ? Icons.send_outlined
+                                    : Icons.block_outlined,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
                               Text(
-                                "Envoyer ma proposition",
+                                !canApply
+                                    ? (isRejected
+                                        ? "Proposition refusée"
+                                        : "Proposition envoyée")
+                                    : "Envoyer ma proposition",
                                 style: GoogleFonts.poppins(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,

@@ -29,26 +29,87 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
 
   Future<void> load() async {
     final token = await AuthService.getToken();
-    if (token == null) return;
-    final data = await service.getProposals(token, widget.projectId);
-    setState(() {
-      proposals = data;
-      loading = false;
-    });
+    if (token == null) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      return;
+    }
+    try {
+      final data = await service.getProposals(token, widget.projectId);
+      if (!mounted) return;
+      setState(() {
+        proposals = data;
+        loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => loading = false);
+    }
   }
 
   // --- ACTIONS ---
+  String _proposalId(dynamic p) {
+    final raw = p['_id'];
+    if (raw == null) return '';
+    if (raw is String) return raw;
+    return raw.toString();
+  }
+
+  String _freelancerName(dynamic p) {
+    final f = p['freelancer'];
+    if (f is Map) {
+      final n = f['name']?.toString();
+      if (n != null && n.isNotEmpty) return n;
+    }
+    return 'Freelance';
+  }
+
   Future<void> handleAction(String id, bool isAccept) async {
+    if (id.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Identifiant de proposition invalide')),
+      );
+      return;
+    }
+
     final token = await AuthService.getToken();
+    if (token == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session expirée — reconnectez-vous.')),
+      );
+      return;
+    }
+
     if (isAccept) {
       final confirm = await _showConfirmDialog();
       if (confirm != true) return;
-      await service.acceptProposal(token!, id);
-Navigator.pop(context, true);
-    } else {
-      await service.rejectProposal(token!, id);
     }
-    load();
+
+    final (bool ok, String message) = isAccept
+        ? await service.acceptProposal(token, id)
+        : await service.rejectProposal(token, id);
+
+    if (!mounted) return;
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      if (isAccept) {
+        Navigator.pop(context, true);
+        return;
+      }
+      await load();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
   }
 
   Future<bool?> _showConfirmDialog() {
@@ -108,7 +169,10 @@ Navigator.pop(context, true);
 
   Widget _buildProposalCard(dynamic p) {
     String status = p["status"] ?? "pending";
-    String freelancerName = p["freelancer"]["name"] ?? "Freelance";
+    final String freelancerName = _freelancerName(p);
+    final String pid = _proposalId(p);
+    final String initial =
+        freelancerName.isNotEmpty ? freelancerName[0].toUpperCase() : '?';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -129,7 +193,7 @@ Navigator.pop(context, true);
               children: [
                 CircleAvatar(
                   backgroundColor: lancyBlue.withOpacity(0.1),
-                  child: Text(freelancerName[0].toUpperCase(), style: TextStyle(color: lancyBlue, fontWeight: FontWeight.bold)),
+                  child: Text(initial, style: TextStyle(color: lancyBlue, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -180,7 +244,7 @@ Navigator.pop(context, true);
                         side: const BorderSide(color: Colors.red),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      onPressed: () => handleAction(p["_id"], false),
+                      onPressed: () => handleAction(pid, false),
                       child: const Text("Refuser", style: TextStyle(color: Colors.red)),
                     ),
                   ),
@@ -192,7 +256,7 @@ Navigator.pop(context, true);
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      onPressed: () => handleAction(p["_id"], true),
+                      onPressed: () => handleAction(pid, true),
                       child: const Text("Accepter", style: TextStyle(color: Colors.white)),
                     ),
                   ),

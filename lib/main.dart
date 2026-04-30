@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:pfe/config/api_config.dart';
 import 'package:pfe/controllers/auth_controller.dart';
 import 'package:pfe/screens/home.dart';
@@ -9,6 +10,7 @@ import 'package:pfe/screens/splash/logo.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('fr_FR');
   await ApiConfig.ensureInitialized();
 
   Get.put(AuthController());

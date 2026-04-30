@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:pfe/config/api_config.dart';
 
 class ProposalService {
-  final String baseUrl = "http://192.168.100.13:5001/api/proposals";
+  String get _baseUrl => "${ApiConfig.baseURL}/proposals";
 
   /// 🔹 CREATE PROPOSAL
   Future<bool> createProposal({
@@ -14,7 +15,7 @@ class ProposalService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse(baseUrl), // ✅ FIX (ما عادش /proposals)
+        Uri.parse(_baseUrl),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -42,7 +43,7 @@ class ProposalService {
   Future<List<dynamic>> getProposals(String token, String projectId) async {
     try {
       final response = await http.get(
-        Uri.parse("$baseUrl/project/$projectId"),
+        Uri.parse("$_baseUrl/project/$projectId"),
         headers: {
           "Authorization": "Bearer $token",
         },
@@ -59,33 +60,42 @@ class ProposalService {
     }
   }
 
-  /// 🔹 ACCEPT PROPOSAL
-  Future<bool> acceptProposal(String token, String id) async {
+  /// 🔹 ACCEPT PROPOSAL — returns (success, server message).
+  Future<(bool, String)> acceptProposal(String token, String id) async {
     try {
       final response = await http.put(
-        Uri.parse("$baseUrl/$id/accept"),
+        Uri.parse("$_baseUrl/$id/accept"),
         headers: {"Authorization": "Bearer $token"},
       );
-
-      return response.statusCode == 200;
+      final msg = _parseMessage(response.body, fallback: response.reasonPhrase);
+      return (response.statusCode == 200, msg);
     } catch (e) {
-      print("❌ Accept Error: $e");
-      return false;
+      return (false, e.toString());
     }
   }
 
   /// 🔹 REJECT PROPOSAL
-  Future<bool> rejectProposal(String token, String id) async {
+  Future<(bool, String)> rejectProposal(String token, String id) async {
     try {
       final response = await http.put(
-        Uri.parse("$baseUrl/$id/reject"),
+        Uri.parse("$_baseUrl/$id/reject"),
         headers: {"Authorization": "Bearer $token"},
       );
-
-      return response.statusCode == 200;
+      final msg = _parseMessage(response.body, fallback: response.reasonPhrase);
+      return (response.statusCode == 200, msg);
     } catch (e) {
-      print("❌ Reject Error: $e");
-      return false;
+      return (false, e.toString());
     }
+  }
+
+  String _parseMessage(String body, {String? fallback}) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['message'] != null) {
+        return decoded['message'].toString();
+      }
+    } catch (_) {}
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+    return 'Erreur réseau';
   }
 }

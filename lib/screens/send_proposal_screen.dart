@@ -7,11 +7,14 @@ class SendProposalScreen extends StatefulWidget {
   final String token;
   final String projectId;
   final String? projectTitle;
+  /// Budget fixé par le client (non modifiable dans le formulaire).
+  final int clientBudget;
 
   const SendProposalScreen({
     super.key,
     required this.token,
     required this.projectId,
+    required this.clientBudget,
     this.projectTitle,
   });
 
@@ -32,11 +35,27 @@ class _SendProposalScreenState extends State<SendProposalScreen> {
   final Color primaryBlue = const Color(0xFF00AEEF);
   final Color primaryPurple = const Color(0xFF8E2DE2);
 
+  @override
+  void initState() {
+    super.initState();
+    _priceController.text =
+        widget.clientBudget > 0 ? '${widget.clientBudget}' : '';
+  }
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    _timeController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
   // --- STYLE DES CHAMPS ---
   InputDecoration _buildInputStyle(
     String label,
     IconData icon, {
     String? suffix,
+    bool muted = false,
   }) {
     return InputDecoration(
       labelText: label,
@@ -44,7 +63,7 @@ class _SendProposalScreenState extends State<SendProposalScreen> {
       prefixIcon: Icon(icon, color: primaryBlue, size: 20),
       suffixText: suffix,
       filled: true,
-      fillColor: Colors.white,
+      fillColor: muted ? Colors.grey.shade100 : Colors.white,
       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
@@ -58,6 +77,10 @@ class _SendProposalScreenState extends State<SendProposalScreen> {
         borderRadius: BorderRadius.circular(15),
         borderSide: BorderSide(color: primaryPurple, width: 1.5),
       ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(15),
+        borderSide: BorderSide(color: Colors.grey[300]!),
+      ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
         borderSide: const BorderSide(color: Colors.redAccent),
@@ -65,57 +88,55 @@ class _SendProposalScreenState extends State<SendProposalScreen> {
     );
   }
 
-Future<void> send() async {
-  if (!_formKey.currentState!.validate()) return;
+  Future<void> send() async {
+    if (!_formKey.currentState!.validate()) return;
+    final price = widget.clientBudget > 0
+        ? widget.clientBudget
+        : int.tryParse(_priceController.text) ?? 0;
+    if (price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Budget du projet invalide.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-  setState(() => loading = true);
+    setState(() => loading = true);
 
-  final token = await AuthService.getToken();
+    final token = await AuthService.getToken();
 
-  final ok = await service.createProposal(
-    token: token!,
-    projectId: widget.projectId,
-    coverLetter: _messageController.text,
-    price: int.parse(_priceController.text),
-    deliveryTime: int.parse(_timeController.text),
-  );
-
-  setState(() => loading = false);
-
-  if (ok) {
-    // ✅ snackbar صغيرة
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text("Proposition envoyée ✅"),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
+    final ok = await service.createProposal(
+      token: token!,
+      projectId: widget.projectId,
+      coverLetter: _messageController.text,
+      price: price,
+      deliveryTime: int.parse(_timeController.text),
     );
 
-    // ✅ يرجع للـ Home بعد شوية صغيرة
-    Future.delayed(const Duration(milliseconds: 500), () {
-      Navigator.pop(context);
-    });
+    setState(() => loading = false);
 
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Erreur lors de l'envoi ❌"),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-}
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Proposition envoyée ✅"),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
 
-  void _showSnackBar(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.inter()),
-        backgroundColor: isError ? Colors.redAccent : Colors.green[600],
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) Navigator.pop(context, true);
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Erreur lors de l'envoi ❌"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -125,7 +146,8 @@ Future<void> send() async {
       appBar: AppBar(
         title: Text(
           "Nouvelle Proposition",
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18),
+          style:
+              GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
         backgroundColor: Colors.white,
@@ -180,13 +202,14 @@ Future<void> send() async {
 
               // --- LIGNE PRIX ET DÉLAI ---
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Prix",
+                          "Prix (budget client)",
                           style: GoogleFonts.poppins(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -195,13 +218,23 @@ Future<void> send() async {
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _priceController,
-                          keyboardType: TextInputType.number,
+                          readOnly: true,
+                          enableInteractiveSelection: true,
+                          showCursor: false,
                           decoration: _buildInputStyle(
-                            "000",
+                            "",
                             Icons.payments_outlined,
                             suffix: "DT",
+                            muted: true,
+                          ).copyWith(
+                            hintText:
+                                widget.clientBudget > 0 ? null : "—",
+                            helperText: 'Fixé par le client',
+                            helperStyle:
+                                GoogleFonts.inter(fontSize: 11),
                           ),
-                          validator: (v) => v!.isEmpty ? "Requis" : null,
+                          validator: (_) =>
+                              widget.clientBudget <= 0 ? "Budget manquant" : null,
                         ),
                       ],
                     ),

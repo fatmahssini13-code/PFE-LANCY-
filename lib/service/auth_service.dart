@@ -87,12 +87,14 @@ static Future<void> _persistAuthPayload(Map<String, dynamic> data) async {
     return Map<String, dynamic>.from(data);
   }
 
-  // --- CHECK USER VALIDITY (L'ajout important) ---
+  // --- CHECK USER VALIDITY ---
+  /// Returns false only when the token is missing or the server explicitly rejects it.
+  /// Network/offline errors return true so reopening the app does not force logout.
   static Future<bool> checkUserExists() async {
-    try {
-      final token = await getToken();
-      if (token == null) return false;
+    final token = await getToken();
+    if (token == null || token.isEmpty) return false;
 
+    try {
       final url = Uri.parse("${ApiConfig.baseURL}/auth/profile");
       final res = await http.get(
         url,
@@ -102,10 +104,30 @@ static Future<void> _persistAuthPayload(Map<String, dynamic> data) async {
         },
       ).timeout(const Duration(seconds: 5));
 
-      // Si le backend renvoie 200, l'utilisateur existe encore
-      return res.statusCode == 200;
-    } catch (e) {
-      return false; // En cas d'erreur réseau ou 401/404
+      if (res.statusCode == 200) {
+        try {
+          final body = jsonDecode(res.body);
+          if (body is Map) {
+            await _persistAuthPayload({
+              "token": token,
+              "user": Map<String, dynamic>.from(body),
+            });
+          }
+        } catch (_) {}
+        return true;
+      }
+      if (res.statusCode == 401 ||
+          res.statusCode == 403 ||
+          res.statusCode == 404) {
+        return false;
+      }
+      return true;
+    } on TimeoutException {
+      return true;
+    } on http.ClientException {
+      return true;
+    } catch (_) {
+      return true;
     }
   }
 

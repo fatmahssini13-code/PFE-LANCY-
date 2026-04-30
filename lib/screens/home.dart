@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:pfe/screens/ProfileScreen.dart';
 import 'package:pfe/screens/chat_screen.dart';
 import 'package:pfe/screens/notifications_screen.dart';
@@ -9,6 +10,7 @@ import 'package:pfe/screens/send_proposal_screen.dart';
 import 'package:pfe/service/home_service.dart';
 import 'package:pfe/service/auth_service.dart';
 import 'package:pfe/service/project_service.dart'; // Assure-toi que ce fichier contient update et delete
+import 'package:pfe/config/api_config.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class HomeScreen extends StatefulWidget {
@@ -31,8 +33,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final HomeService homeService = HomeService();
   final Color skyBlue = const Color(0xFF74C0FC);
   final Color lancyPurple = const Color(0xFF8E2DE2);
-  int _refresh =
-      0; // Variable utilisée pour forcer le rafraîchissement du FutureBuilder
+  static const Color _cardBorder = Color(0xFFE8ECF2);
+  static const Color _slateText = Color(0xFF475569);
+  /// Not [late]: hot reload does not re-run [initState], which caused LateInitializationError.
+  Future<List<dynamic>>? _projectsFuture;
   IO.Socket? socket;
   bool hasNotification = false;
   List<Map<String, dynamic>> notificationHistory = [];
@@ -40,15 +44,39 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _ensureProjectsFuture();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _connectSocket();
     });
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    // Only invoked during debug hot reload — re-bind future because [initState] does not run again.
+    _projectsFuture = _loadProjectsList();
+  }
+
+  void _ensureProjectsFuture() {
+    _projectsFuture ??= _loadProjectsList();
+  }
+
+  Future<List<dynamic>> _loadProjectsList() async {
+    final isClient = widget.role.toLowerCase() == 'client';
+    return _getProjects(isClient);
+  }
+
+  Future<void> _reloadProjects() async {
+    setState(() {
+      _projectsFuture = _loadProjectsList();
+    });
+    await _projectsFuture;
   }
   // Déclare le socket en dehors pour qu'il soit persistant
 
   void _connectSocket() {
   // On initialise le socket s'il est null
-  socket ??= IO.io('http://192.168.100.13:5001', <String, dynamic>
+  socket ??= IO.io(ApiConfig.socketUrl, <String, dynamic>
   {
     'transports': ['websocket'],
     'autoConnect': true,
@@ -57,15 +85,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // À chaque reconnexion, on rejoint la room IMMÉDIATEMENT
   socket!.onConnect((_) {
-    print('✅ Connexion établie');
-    socket!.emit('join', widget.email.trim().toLowerCase());
+    Future.microtask(() async {
+      final uid = await AuthService.getUserId();
+      if (!mounted || socket == null) return;
+      /** Même clé que le backend : Mongo user id pour `io.to(id)` (notifs, etc.). */
+      if (uid != null && uid.isNotEmpty) {
+        socket!.emit('join', uid);
+      } else {
+        socket!.emit('join', widget.email.trim().toLowerCase());
+      }
+      if (mounted) debugPrint('✅ Connexion établie (socket join)');
+    });
   });
 
   // On s'assure qu'on n'a pas de doublons d'écouteurs
-  socket!.off('notification'); 
+  socket!.off('notification');
 
   socket!.on('notification', (data) {
-    print('🔔 SIGNAL REÇU !');
+    debugPrint('🔔 SIGNAL REÇU !');
     if (mounted) {
       setState(() {
         hasNotification = true;
@@ -104,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Si client, on récupère ses propres projets, sinon tous les projets (freelancer)
     return isClient
         ? homeService.fetchMyProjects(token)
-        : homeService.fetchProjects();
+        : homeService.fetchProjects(authToken: token);
   }
 
   // --- ACTION : SUPPRESSION ---
@@ -120,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
         try {
           await ProjectService.deleteProject(projectId);
           Get.back(); // Fermer le dialogue
-          setState(() => _refresh++); // Rafraîchir la liste
+          _reloadProjects(); // Rafraîchir la liste
           Get.snackbar(
             "Succès",
             "Projet supprimé",
@@ -188,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   "budget": budget.text,
                 });
                 Navigator.pop(context);
-                setState(() => _refresh++);
+                _reloadProjects();
                 Get.snackbar("Succès", "Projet mis à jour");
               } catch (e) {
                 Get.snackbar("Erreur", "Échec de la mise à jour");
@@ -206,6 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _ensureProjectsFuture();
     bool isClient = widget.role.toLowerCase() == "client";
 
     return Scaffold(
@@ -254,7 +292,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             onPressed: () => Get.to(() => ProfileScreen(email: widget.email)),
             icon: CircleAvatar(
-              backgroundColor: skyBlue.withOpacity(0.2),
+              backgroundColor: skyBlue.withValues(alpha: 0.2),
               child: const Icon(Icons.person, color: Colors.blue),
             ),
           ),
@@ -277,10 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildHeader(),
           Expanded(
             child: FutureBuilder<List<dynamic>>(
-              key: ValueKey(
-                _refresh,
-              ), // Force la reconstruction quand _refresh change
-              future: _getProjects(isClient),
+              future: _projectsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(
@@ -289,13 +324,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
                 final data = snapshot.data ?? [];
                 if (data.isEmpty) {
-                  return _buildEmptyState(isClient);
+                  return RefreshIndicator(
+                    color: lancyPurple,
+                    onRefresh: _reloadProjects,
+                    child: CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _buildEmptyState(isClient),
+                        ),
+                      ],
+                    ),
+                  );
                 }
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: data.length,
-                  itemBuilder: (context, index) =>
-                      _projectCard(data[index], isClient),
+                return RefreshIndicator(
+                  color: lancyPurple,
+                  onRefresh: _reloadProjects,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                    itemCount: data.length,
+                    itemBuilder: (context, index) =>
+                        _projectCard(data[index], isClient),
+                  ),
                 );
               },
             ),
@@ -306,8 +358,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeader() {
+    final isClient = widget.role.toLowerCase() == 'client';
     return Padding(
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -316,14 +369,32 @@ class _HomeScreenState extends State<HomeScreen> {
             style: GoogleFonts.poppins(
               fontSize: 22,
               fontWeight: FontWeight.bold,
+              letterSpacing: -0.3,
+              height: 1.2,
             ),
           ),
+          const SizedBox(height: 6),
           Text(
-            widget.role == "client"
+            isClient
                 ? "Gérez vos missions publiées"
                 : "Trouvez votre prochaine mission",
-            style: GoogleFonts.inter(color: Colors.grey[600]),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: Colors.grey[600],
+              height: 1.35,
+            ),
           ),
+          if (!isClient) ...[
+            const SizedBox(height: 10),
+            Text(
+              "Budget, client et statut sur chaque carte — tirez vers le bas pour actualiser.",
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.grey[500],
+                height: 1.35,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -331,62 +402,465 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildEmptyState(bool isClient) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.work_outline_rounded, size: 72, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              isClient
+                  ? "Vous n'avez pas encore publié de mission"
+                  : "Aucune mission pour le moment",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isClient
+                  ? "Utilisez le bouton « Poster » pour attirer des freelances."
+                  : "Revenez plus tard ou tirez pour actualiser la liste.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _projectCard(dynamic item, bool isClient) {
+    final bool isAccepted = item["acceptedFreelancer"] != null;
+
+    if (isClient) {
+      return _buildClientMissionCard(item, isAccepted);
+    }
+    return _buildFreelancerMissionCard(item);
+  }
+
+  /// Budget projet (nombre entier DT) pour l’API / lecture seule proposition.
+  int _budgetAsInt(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is int) return raw;
+    if (raw is num) return raw.round();
+    return int.tryParse(raw.toString()) ?? 0;
+  }
+
+  BoxDecoration _missionCardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: _cardBorder),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+          blurRadius: 20,
+          offset: const Offset(0, 10),
+        ),
+      ],
+    );
+  }
+
+  ({String label, Color bg, Color fg}) _statusStyle(String? status) {
+    switch ((status ?? 'open').toLowerCase()) {
+      case 'open':
+        return (
+          label: 'Ouverte',
+          bg: const Color(0xFFE0F2FE),
+          fg: const Color(0xFF0369A1),
+        );
+      case 'in_progress':
+        return (
+          label: 'En cours',
+          bg: const Color(0xFFFEF3C7),
+          fg: const Color(0xFFB45309),
+        );
+      case 'delivered':
+        return (
+          label: 'Livrée',
+          bg: const Color(0xFFD1FAE5),
+          fg: const Color(0xFF047857),
+        );
+      case 'completed':
+        return (
+          label: 'Terminée',
+          bg: const Color(0xFFE5E7EB),
+          fg: const Color(0xFF374151),
+        );
+      default:
+        return (
+          label: status ?? '—',
+          bg: const Color(0xFFF1F5F9),
+          fg: _slateText,
+        );
+    }
+  }
+
+  Widget _statusBadge(String? status) {
+    final s = _statusStyle(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: s.bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        s.label,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: s.fg,
+        ),
+      ),
+    );
+  }
+
+  Widget _metaChip({required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _cardBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.folder_open, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 10),
-          Text(
-            isClient
-                ? "Vous n'avez posté aucun projet"
-                : "Aucun projet disponible",
-            style: GoogleFonts.inter(color: Colors.grey),
+          Icon(icon, size: 16, color: const Color(0xFF64748B)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF334155),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
     );
   }
 
-Widget _projectCard(dynamic item, bool isClient) {
-  // 1. Déterminer les états du projet
-  final bool isAccepted = item["acceptedFreelancer"] != null;
-  
-  // On récupère le statut de la proposition (doit être envoyé par ton backend)
-  final String proposalStatus = item["userProposalStatus"] ?? "none"; 
-  final bool isRejected = proposalStatus == "rejected";
+  String _formatBudget(dynamic raw) {
+    if (raw == null) return '—';
+    final n = raw is num ? raw : num.tryParse(raw.toString());
+    if (n == null) return '$raw DT';
+    final intPart = n.round();
+    if ((n - intPart).abs() < 1e-9) {
+      return '${NumberFormat.decimalPattern('fr_FR').format(intPart)} DT';
+    }
+    return '${NumberFormat.decimalPattern('fr_FR').format(n)} DT';
+  }
 
-  return Container(
-    margin: const EdgeInsets.only(bottom: 16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.03),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // --- ENTÊTE : Titre et Menu ---
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  item["title"] ?? "Sans titre",
-                  style: GoogleFonts.poppins(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
+  String _ownerDisplayName(dynamic item) {
+    final o = item['owner'];
+    if (o is Map) {
+      final name = o['name']?.toString().trim();
+      if (name != null && name.isNotEmpty) return name;
+      final mail = o['email']?.toString();
+      if (mail != null && mail.isNotEmpty) {
+        final local = mail.split('@').first;
+        return local.isNotEmpty ? local : 'Client';
+      }
+    }
+    return 'Client';
+  }
+
+  /// Nom du freelance retenu pour le chat côté client (API populate `acceptedFreelancer`).
+  String _acceptedFreelancerChatName(dynamic item) {
+    final f = item['acceptedFreelancer'];
+    if (f is Map) {
+      final name = f['name']?.toString().trim();
+      if (name != null && name.isNotEmpty) return name;
+      final mail = f['email']?.toString();
+      if (mail != null && mail.isNotEmpty) {
+        final local = mail.split('@').first;
+        if (local.isNotEmpty) return local;
+      }
+    }
+    final legacy = item['freelancerName']?.toString().trim();
+    if (legacy != null && legacy.isNotEmpty) return legacy;
+    return 'Freelancer';
+  }
+
+  String _postedRelative(dynamic raw) {
+    if (raw == null) return '';
+    final dt = DateTime.tryParse(raw.toString());
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return "À l'instant";
+    if (diff.inHours < 1) return 'Il y a ${diff.inMinutes} min';
+    if (diff.inDays < 1) return 'Il y a ${diff.inHours} h';
+    if (diff.inDays < 7) return 'Il y a ${diff.inDays} j';
+    return DateFormat.yMMMd('fr_FR').format(dt);
+  }
+
+  Future<void> _openMissionChat(
+    dynamic item, {
+    required bool isClient,
+    required bool isRejected,
+    required bool isAccepted,
+  }) async {
+    if (!isClient && isRejected) {
+      Get.snackbar(
+        "Accès refusé",
+        "Vous ne pouvez plus contacter le client car votre offre a été refusée.",
+        backgroundColor: Colors.red[100],
+        colorText: Colors.red[900],
+      );
+      return;
+    }
+    if (!isClient) {
+      final ps = item["userProposalStatus"]?.toString() ?? "none";
+      if (ps != "accepted") {
+        Get.snackbar(
+          "Chat verrouillé",
+          "Le client doit accepter votre proposition pour ouvrir la messagerie.",
+          backgroundColor: Colors.orange[100],
+          colorText: Colors.orange.shade900,
+        );
+        return;
+      }
+    }
+    if (isClient && !isAccepted) {
+      Get.snackbar(
+        "Action requise",
+        "Vous devez accepter une proposition pour débloquer le chat.",
+        backgroundColor: Colors.orange[100],
+      );
+      return;
+    }
+
+    final currentUserId = await AuthService.getUserId();
+    if (currentUserId == null) return;
+
+    String? receiverId;
+    String receiverName = "Utilisateur";
+
+    if (isClient) {
+      final fData = item["acceptedFreelancer"];
+      receiverId = (fData is Map) ? fData["_id"] ?? fData["id"] : fData;
+      receiverName = _acceptedFreelancerChatName(item);
+    } else {
+      final oData = item["owner"];
+      receiverId = (oData is Map) ? oData["_id"] : oData;
+      receiverName =
+          (oData is Map) ? (oData["name"] ?? "Client") : "Client";
+    }
+
+    if (receiverId != null) {
+      Get.to(() => ChatScreen(
+            currentUserId: currentUserId,
+            receiverId: receiverId!,
+            receiverName: receiverName,
+            projectId: item["_id"].toString(),
+          ));
+    } else {
+      Get.snackbar("Erreur", "Impossible de trouver l'interlocuteur.");
+    }
+  }
+
+  Widget _buildFreelancerMissionCard(dynamic item) {
+    final title = item["title"] ?? "Sans titre";
+    final desc = (item["description"] ?? "").toString();
+    final status = item["status"]?.toString();
+    final posted = _postedRelative(item["createdAt"]);
+    final String proposalStatus =
+        item["userProposalStatus"]?.toString() ?? "none";
+    final bool isRejected = proposalStatus == "rejected";
+    final bool hasActiveProposal =
+        proposalStatus == "pending" || proposalStatus == "accepted";
+    final bool canPostuler = !isRejected && !hasActiveProposal;
+
+    final bool proposalAccepted =
+        proposalStatus == "accepted";
+    final chatEnabled = proposalAccepted;
+    final chatColor = chatEnabled
+        ? const Color(0xFF059669)
+        : Colors.grey.withValues(alpha: 0.45);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: _missionCardDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _statusBadge(status)),
+                if (posted.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Icon(Icons.schedule_rounded,
+                      size: 15, color: Colors.grey[500]),
+                  const SizedBox(width: 4),
+                  Text(
+                    posted,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+                letterSpacing: -0.2,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _metaChip(
+                  icon: Icons.payments_outlined,
+                  label: _formatBudget(item["budget"]),
+                ),
+                _metaChip(
+                  icon: Icons.person_outline_rounded,
+                  label: _ownerDisplayName(item),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              desc.isEmpty ? 'Pas de description.' : desc,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                height: 1.45,
+                color: _slateText,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: canPostuler
+                        ? () async {
+                            final token = await AuthService.getToken();
+                            if (token != null && mounted) {
+                              final sent = await Get.to<bool>(() =>
+                                  SendProposalScreen(
+                                    projectId: item["_id"].toString(),
+                                    token: token,
+                                    projectTitle:
+                                        title?.toString() ?? 'Sans titre',
+                                    clientBudget: _budgetAsInt(item["budget"]),
+                                  ));
+                              if (sent == true && mounted) {
+                                await _reloadProjects();
+                              }
+                            }
+                          }
+                        : null,
+                    icon: Icon(
+                      canPostuler
+                          ? Icons.send_rounded
+                          : Icons.block_rounded,
+                      size: 20,
+                    ),
+                    label: Text(
+                      isRejected
+                          ? 'Proposition refusée'
+                          : hasActiveProposal
+                              ? 'Proposition envoyée'
+                              : 'Postuler',
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: canPostuler
+                          ? skyBlue
+                          : Colors.grey.shade400,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      disabledForegroundColor: Colors.white70,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
                   ),
                 ),
-              ),
-              if (isClient)
+                const SizedBox(width: 10),
+                Material(
+                  color: chatEnabled
+                      ? const Color(0xFFECFDF5)
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: chatEnabled
+                        ? () => _openMissionChat(
+                              item,
+                              isClient: false,
+                              isRejected: isRejected,
+                              isAccepted: item["acceptedFreelancer"] != null,
+                            )
+                        : null,
+                    child: SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: chatColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClientMissionCard(dynamic item, bool isAccepted) {
+    final title = item["title"] ?? "Sans titre";
+    final desc = (item["description"] ?? "").toString();
+    final status = item["status"]?.toString();
+    final proposalStatus = item["userProposalStatus"] ?? "none";
+    final isRejected = proposalStatus == "rejected";
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: _missionCardDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _statusBadge(status)),
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == 'edit') {
@@ -399,7 +873,7 @@ Widget _projectCard(dynamic item, bool isClient) {
                     const PopupMenuItem(
                       value: 'edit',
                       child: ListTile(
-                        leading: Icon(Icons.edit, color: Colors.blue),
+                        leading: Icon(Icons.edit_rounded, color: Colors.blue),
                         title: Text("Modifier"),
                         contentPadding: EdgeInsets.zero,
                       ),
@@ -407,59 +881,69 @@ Widget _projectCard(dynamic item, bool isClient) {
                     const PopupMenuItem(
                       value: 'delete',
                       child: ListTile(
-                        leading: Icon(Icons.delete, color: Colors.red),
+                        leading: Icon(Icons.delete_outline_rounded,
+                            color: Colors.red),
                         title: Text("Supprimer"),
                         contentPadding: EdgeInsets.zero,
                       ),
                     ),
                   ],
-                  child: const Icon(Icons.more_vert, color: Colors.grey),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          
-          // --- DESCRIPTION ---
-          Text(
-            item["description"] ?? "",
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.grey[700], height: 1.4),
-          ),
-          const SizedBox(height: 16),
-          
-          // --- ACTIONS (BOUTONS) ---
-          Row(
-            children: [
-              // Bouton Principal : Postuler (Freelance) ou Voir Propositions (Client)
-              if (!isClient)
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isRejected ? Colors.grey : skyBlue,
-                    ),
-                    onPressed: isRejected 
-                      ? null // Bouton désactivé si refusé
-                      : () async {
-                          final token = await AuthService.getToken();
-                          if (token != null) {
-                            Get.to(() => SendProposalScreen(
-                              projectId: item["_id"],
-                              token: token,
-                            ));
-                          }
-                        },
-                    child: Text(isRejected ? "Refusé" : "Postuler"),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Icon(Icons.more_horiz_rounded, color: Colors.grey[600]),
                   ),
-                )
-              else
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _metaChip(
+                  icon: Icons.payments_outlined,
+                  label: _formatBudget(item["budget"]),
+                ),
+                if (_postedRelative(item["createdAt"]).isNotEmpty)
+                  _metaChip(
+                    icon: Icons.calendar_today_outlined,
+                    label: _postedRelative(item["createdAt"]),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              desc.isEmpty ? 'Pas de description.' : desc,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                height: 1.45,
+                color: _slateText,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.list_alt, size: 18),
-                    label: const Text("Voir les propositions"),
+                    icon: const Icon(Icons.group_outlined, size: 20),
+                    label: const Text('Voir les propositions'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: lancyPurple,
-                      side: BorderSide(color: lancyPurple),
+                      side: BorderSide(color: lancyPurple.withValues(alpha: 0.65)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -469,78 +953,40 @@ Widget _projectCard(dynamic item, bool isClient) {
                     ),
                   ),
                 ),
-
-              const SizedBox(width: 10),
-
-              // --- BOUTON MESSAGE (L'icône Chat) ---
-              IconButton(
-                tooltip: "Contacter",
-                icon: Icon(
-                  Icons.message,
-                  color: isRejected 
-                      ? Colors.grey.withOpacity(0.5) 
-                      : (isClient && !isAccepted ? Colors.grey : Colors.green),
+                const SizedBox(width: 10),
+                Material(
+                  color: !isAccepted
+                      ? Colors.grey.shade100
+                      : const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _openMissionChat(
+                          item,
+                          isClient: true,
+                          isRejected: isRejected,
+                          isAccepted: isAccepted,
+                        ),
+                    child: SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: !isAccepted
+                            ? Colors.grey.withValues(alpha: 0.45)
+                            : const Color(0xFF059669),
+                      ),
+                    ),
+                  ),
                 ),
-                onPressed: () async {
-                  // 1. Bloquer si le freelance est refusé
-                  if (!isClient && isRejected) {
-                    Get.snackbar(
-                      "Accès refusé", 
-                      "Vous ne pouvez plus contacter le client car votre offre a été refusée.",
-                      backgroundColor: Colors.red[100],
-                      colorText: Colors.red[900]
-                    );
-                    return;
-                  }
-
-                  // 2. Bloquer si le client n'a pas encore accepté de freelance
-                  if (isClient && !isAccepted) {
-                    Get.snackbar(
-                      "Action requise", 
-                      "Vous devez accepter une proposition pour débloquer le chat.",
-                      backgroundColor: Colors.orange[100]
-                    );
-                    return;
-                  }
-
-                  final currentUserId = await AuthService.getUserId();
-                  if (currentUserId == null) return;
-
-                  // 3. Récupération dynamique du destinataire
-                  String? receiverId;
-                  String receiverName = "Utilisateur";
-
-                  if (isClient) {
-                    // Le client parle au freelance accepté
-                    final fData = item["acceptedFreelancer"];
-                    receiverId = (fData is Map) ? fData["_id"] : fData;
-                    receiverName = item["freelancerName"] ?? "Freelancer";
-                  } else {
-                    // Le freelance parle au proprio (clé "owner" d'après tes logs)
-                    final oData = item["owner"];
-                    receiverId = (oData is Map) ? oData["_id"] : oData;
-                    receiverName = (oData is Map) ? (oData["name"] ?? "Client") : "Client";
-                  }
-
-                  if (receiverId != null) {
-                    Get.to(() => ChatScreen(
-                      currentUserId: currentUserId,
-                      receiverId: receiverId!,
-                      receiverName: receiverName,
-                      projectId: item["_id"],
-                    ));
-                  } else {
-                    Get.snackbar("Erreur", "Impossible de trouver l'interlocuteur.");
-                  }
-                },
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
+
   // --- DIALOGUE D'AJOUT ---
   void _showAddProjectDialog(BuildContext context) {
     final title = TextEditingController();
@@ -600,9 +1046,7 @@ Widget _projectCard(dynamic item, bool isClient) {
 
               if (success) {
                 Navigator.pop(context);
-                setState(() {
-                  _refresh++; // Déclenche le rechargement de la liste
-                });
+                await _reloadProjects();
                 Get.snackbar("Succès", "Mission publiée !");
               } else {
                 Get.snackbar("Erreur", "Échec de la publication");

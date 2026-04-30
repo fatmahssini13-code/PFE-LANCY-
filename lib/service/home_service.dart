@@ -15,26 +15,30 @@ class HomeService {
     }
   }
 
-  // --- 2. POUR LE FREELANCER : VOIR TOUS LES PROJETS ---
- // Dans home_service.dart
-Future<List<dynamic>> fetchProjects() async {
-  try {
-    // Vérifie que cette URL est correcte et sans filtre d'ID
-    final response = await http.get(
-      Uri.parse("http://192.168.100.13:5001/api/projects"), 
-      headers: {"Content-Type": "application/json"},
-    );
+  // --- 2. POUR LE FREELANCER : VOIR TOUTES LES MISSIONS (projets clients) ---
+  /// Passe [authToken] pour recevoir `userProposalStatus` (déjà postulé ou non).
+  Future<List<dynamic>> fetchProjects({String? authToken}) async {
+    try {
+      final response = await http.get(
+        Uri.parse("${ApiConfig.origin}/api/projects"),
+        headers: {
+          "Content-Type": "application/json",
+          if (authToken != null && authToken.isNotEmpty)
+            "Authorization": "Bearer $authToken",
+        },
+      );
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        return decoded is List ? decoded : <dynamic>[];
+      }
+      return [];
+    } catch (e) {
+      // ignore: avoid_print
+      print("❌ Erreur fetchProjects: $e");
       return [];
     }
-  } catch (e) {
-    print("❌ Erreur fetchProjects: $e");
-    return [];
   }
-}
 
   /// Projets publiés par le client connecté (JWT requis).
   Future<List<dynamic>> fetchMyProjects(String token) async {
