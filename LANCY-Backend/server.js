@@ -3,7 +3,7 @@ const cors = require("cors");
 const http = require("http"); // Indispensable pour Socket.io
 require("dotenv").config();
 const { Server } = require('socket.io');
-
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const connectDB = require("./config/db");
 const Message = require('./models/message');
 const Project = require("./models/project");
@@ -179,6 +179,37 @@ const MY_IP = "192.168.100.13";
 const paymentRoutes = require("./routes/paymentRoutes");
 app.use("/api/payment", paymentRoutes);
 
+app.post("/chat", async (req, res) => {
+  const message = req.body.message;
+
+  if (!message) {
+    return res.status(400).json({ error: "message required" });
+  }
+
+  try {
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            parts: [{ text: message }]
+          }
+        ]
+      }
+    );
+
+    const reply =
+      response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "no response";
+
+    res.json({ reply });
+
+  } catch (error) {
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
 connectDB()
     .then(() => {
         // IMPORTANT : Utiliser server.listen et non app.listen pour que Socket.io fonctionne
@@ -187,6 +218,7 @@ connectDB()
             console.log(`: http://${MY_IP}:${PORT}`);
         });
     })
+
     .catch((err) => {
         console.error("❌ Erreur de connexion MongoDB :", err);
     });

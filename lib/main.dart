@@ -54,40 +54,40 @@ class _SessionLauncherState extends State<_SessionLauncher> {
     super.initState();
     _openHome();
   }
-
-  Future<void> _openHome() async {
-    // 1. Nthabtou el User mazal mawjoud f'el DB walla (Khater faskhtou enti)
-    final bool isUserStillValid = await AuthService.checkUserExists();
+Future<void> _openHome() async {
+  try {
+    // 1. On ajoute un timeout de 5 secondes max
+    // Si le serveur ne répond pas après 5s, on considère que le check a échoué
+    final bool isUserStillValid = await AuthService.checkUserExists()
+        .timeout(const Duration(seconds: 5), onTimeout: () => false);
 
     if (!isUserStillValid) {
-      // Ken el user mouch mawjoud (faskhtou), nfasskhou el token w narj3ou lel Splash
       await AuthService.removeToken();
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const SplashPage()),
-      );
+      Get.offAll(() => const SplashPage()); // On utilise Get pour nettoyer la pile
       return;
     }
 
-    // 2. Ken el User valid, njibou el data mte3na mrigla
+    // 2. Récupération des infos locales (stockées dans SharedPreferences/SecureStorage)
     final email = await AuthService.getUserEmail();
     final role = await AuthService.getUserRole();
     final name = await AuthService.getUserName();
 
     if (!mounted) return;
 
-    // 3. Navigation lel HomeScreen
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => HomeScreen(
+    // 3. Navigation vers HomeScreen
+    Get.offAll(() => HomeScreen(
           email: email ?? '',
           role: role ?? 'client',
           name: name,
-        ),
-      ),
-    );
+        ));
+  } catch (e) {
+    debugPrint("Erreur réseau ou session : $e");
+    // En cas d'erreur (serveur éteint), on redirige vers le Splash/Login
+    if (!mounted) return;
+    Get.offAll(() => const SplashPage());
   }
-
+}
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
