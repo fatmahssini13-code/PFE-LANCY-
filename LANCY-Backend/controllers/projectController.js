@@ -170,3 +170,50 @@ const addProject = async (req, res) => {
         res.status(500).json({ message: "Erreur serveur", error: error.message });
     }
 };
+// --- 6. APPROUVER ET LIBÉRER LES FONDS (Action Client) ---
+exports.approveAndReleaseFunds = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await Project.findById(id);
+
+    if (!project) return res.status(404).json({ message: "Projet non trouvé" });
+
+    // Sécurité : Seul le propriétaire (owner) peut approuver
+    // if (project.owner.toString() !== req.user._id.toString()) {
+    //   return res.status(403).json({ message: "Non autorisé" });
+    // }
+
+    project.status = "completed";
+    project.paymentStatus = "released";
+    
+    await project.save();
+
+    console.log(`✅ Fonds libérés pour le projet : ${project.title}`);
+    res.status(200).json({ message: "Paiement libéré au freelance avec succès !", project });
+  } catch (error) {
+    res.status(500).json({ message: "Erreur lors de la libération des fonds", error: error.message });
+  }
+};
+// --- 7. ACTIONS ADMIN (Litige) ---
+exports.adminReleaseOrRefund = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'release' ou 'refund'
+
+    const project = await Project.findById(id);
+    if (!project) return res.status(404).json({ message: "Projet non trouvé" });
+
+    if (action === "release") {
+      project.status = "completed";
+      project.paymentStatus = "released";
+    } else if (action === "refund") {
+      project.status = "cancelled";
+      project.paymentStatus = "refunded";
+    }
+
+    await project.save();
+    res.status(200).json({ message: `Action Admin : ${action} effectuée`, project });
+  } catch (error) {
+    res.status(500).json({ message: "Erreur Admin", error: error.message });
+  }
+};

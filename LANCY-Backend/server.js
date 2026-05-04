@@ -2,13 +2,52 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http"); // Indispensable pour Socket.io
 require("dotenv").config();
+const app = express();
 const { Server } = require('socket.io');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const connectDB = require("./config/db");
 const Message = require('./models/message');
 const Project = require("./models/project");
+const stripe = require("./config/stripe");
+
+app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.log("❌ Webhook error:", err.message);
+    return res.sendStatus(400);
+  }
+
+  // 🟢 Payment success → ESCROW LOCK
+  if (event.type === "payment_intent.succeeded") {
+    const paymentIntent = event.data.object;
+
+    const projectId = paymentIntent.metadata.projectId;
+
+    const project = await Project.findById(projectId);
+
+    if (project) {
+      project.escrowStatus = "locked"; // 🔒
+      project.status = "in_progress";
+      await project.save();
+
+      console.log("🔒 Escrow locked for project:", projectId);
+    }
+  }
+
+  res.json({ received: true });
+});
 // Initialisation de l'application
-const app = express();
+
+
 const server = http.createServer(app); // On crée le serveur à partir de app
 const io = new Server(server, {
     cors: { origin: "*" } 
@@ -17,14 +56,11 @@ app.set('io', io);
 // 1. MIDDLEWARES
 app.use(cors());
 app.use(express.json());
-// ✅ import simple
+
 const notificationRoutes = require("./routes/notificationRoutes");
 app.use("/api/notifications", notificationRoutes);
 
-// 2. LOGIQUE SOCKET.IO (MESSENGER)
-// ... (haut du fichier inchangé jusqu'à app.set)
 
-// 2. LOGIQUE SOCKET.IO (MESSENGER & NOTIFICATIONS)
 
 function strId(v) {
   if (v === undefined || v === null) return "";
@@ -172,6 +208,7 @@ app.use("/uploads", express.static("uploads"));
   console.log("AUTH ROUTE HIT:", req.url);
   next();
 }, authRoutes);
+app.use('/uploads', express.static('uploads'));
 // 5. CONNEXION DB ET LANCEMENT UNIQUE
 const PORT = Number(process.env.PORT) || 5001;
 const MY_IP = "192.168.100.13"; 
@@ -179,37 +216,6 @@ const MY_IP = "192.168.100.13";
 const paymentRoutes = require("./routes/paymentRoutes");
 app.use("/api/payment", paymentRoutes);
 
-app.post("/chat", async (req, res) => {
-  const message = req.body.message;
-
-  if (!message) {
-    return res.status(400).json({ error: "message required" });
-  }
-
-  try {
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [{ text: message }]
-          }
-        ]
-      }
-    );
-
-    const reply =
-      response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "no response";
-
-    res.json({ reply });
-
-  } catch (error) {
-    res.status(500).json({
-      error: error.message
-    });
-  }
-});
 connectDB()
     .then(() => {
         // IMPORTANT : Utiliser server.listen et non app.listen pour que Socket.io fonctionne
@@ -218,7 +224,6 @@ connectDB()
             console.log(`: http://${MY_IP}:${PORT}`);
         });
     })
-
     .catch((err) => {
         console.error("❌ Erreur de connexion MongoDB :", err);
     });

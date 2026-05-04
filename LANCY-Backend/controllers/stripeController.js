@@ -10,8 +10,8 @@ exports.processPayment = async (req, res) => {
 
     // Création de l'intention de paiement
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: project.budget * 1000, // Conversion en millimes (pour TND) ou centimes
-      currency: 'tnd',
+      amount: project.budget * 100, 
+      currency: 'usd',
       metadata: { projectId: project._id.toString() },
       automatic_payment_methods: { enabled: true },
     });
@@ -27,15 +27,3 @@ exports.processPayment = async (req, res) => {
 };
 
 // Confirmation après succès sur Flutter
-exports.confirmPayment = async (req, res) => {
-  try {
-    const { projectId } = req.body;
-    await Project.findByIdAndUpdate(projectId, { 
-        escrowStatus: 'locked',
-        status: 'in_progress' 
-    });
-    res.json({ message: "Fonds bloqués en Escrow avec succès 🔒" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};

@@ -18,7 +18,7 @@ class _ChatGeminiScreenState extends State<ChatGeminiScreen> {
       reply = "";
     });
 
-    final url = Uri.parse("http://10.0.2.2:8000/api/chat-gemini");
+    final url = Uri.parse("http://192.168.100.13:5001/api/chat-gemini");
 
     final response = await http.post(
       url,

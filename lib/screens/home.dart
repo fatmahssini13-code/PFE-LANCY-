@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pfe/screens/ProfileScreen.dart';
 import 'package:pfe/screens/chat_screen.dart';
@@ -30,24 +33,52 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // ✅ Ajoute cette variable
+  int _notificationCount = 0;
   final HomeService homeService = HomeService();
   final Color skyBlue = const Color(0xFF74C0FC);
   final Color lancyPurple = const Color(0xFF8E2DE2);
   static const Color _cardBorder = Color(0xFFE8ECF2);
   static const Color _slateText = Color(0xFF475569);
+
   /// Not [late]: hot reload does not re-run [initState], which caused LateInitializationError.
   Future<List<dynamic>>? _projectsFuture;
   IO.Socket? socket;
   bool hasNotification = false;
   List<Map<String, dynamic>> notificationHistory = [];
-//socket ??= IO.io('http://192.168.1.100:5001', <String, dynamic>
+  //socket ??= IO.io('http://192.168.1.100:5001', <String, dynamic>
   @override
   void initState() {
     super.initState();
     _ensureProjectsFuture();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _connectSocket();
+      _loadNotificationCount();
     });
+  }
+
+  Future<void> _loadNotificationCount() async {
+    try {
+      final token = await AuthService.getToken();
+      
+      if (token == null) return;
+      final response = await http.get(
+        Uri.parse("${ApiConfig.baseURL}/notifications"),
+        headers: {"Authorization": "Bearer $token"},
+      );
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        final unread = data.where((n) => n['read'] == false).length;
+        if (mounted) {
+          setState(() {
+            _notificationCount = unread;
+            hasNotification = unread > 0;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ Erreur notif count: $e");
+    }
   }
 
   @override
@@ -75,53 +106,53 @@ class _HomeScreenState extends State<HomeScreen> {
   // Déclare le socket en dehors pour qu'il soit persistant
 
   void _connectSocket() {
-  // On initialise le socket s'il est null
-  socket ??= IO.io(ApiConfig.socketUrl, <String, dynamic>
-  {
-    'transports': ['websocket'],
-    'autoConnect': true,
-    'forceNew': false, // Très important pour garder la même session
-  });
-
-  // À chaque reconnexion, on rejoint la room IMMÉDIATEMENT
-  socket!.onConnect((_) {
-    Future.microtask(() async {
-      final uid = await AuthService.getUserId();
-      if (!mounted || socket == null) return;
-      /** Même clé que le backend : Mongo user id pour `io.to(id)` (notifs, etc.). */
-      if (uid != null && uid.isNotEmpty) {
-        socket!.emit('join', uid);
-      } else {
-        socket!.emit('join', widget.email.trim().toLowerCase());
-      }
-      if (mounted) debugPrint('✅ Connexion établie (socket join)');
+    // On initialise le socket s'il est null
+    socket ??= IO.io(ApiConfig.socketUrl, <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+      'forceNew': false, // Très important pour garder la même session
     });
-  });
 
-  // On s'assure qu'on n'a pas de doublons d'écouteurs
-  socket!.off('notification');
-
-  socket!.on('notification', (data) {
-    debugPrint('🔔 SIGNAL REÇU !');
-    if (mounted) {
-      setState(() {
-        hasNotification = true;
-        notificationHistory.insert(0, Map<String, dynamic>.from(data));
+    // À chaque reconnexion, on rejoint la room IMMÉDIATEMENT
+    socket!.onConnect((_) {
+      Future.microtask(() async {
+        final uid = await AuthService.getUserId();
+        if (!mounted || socket == null) return;
+        /** Même clé que le backend : Mongo user id pour `io.to(id)` (notifs, etc.). */
+        if (uid != null && uid.isNotEmpty) {
+          socket!.emit('join', uid);
+        } else {
+          socket!.emit('join', widget.email.trim().toLowerCase());
+        }
+        if (mounted) debugPrint('✅ Connexion établie (socket join)');
       });
-      Get.snackbar(
-        data['title'] ?? "Nouveau",
-        data['message'] ?? "Proposition reçue",
-        backgroundColor: Colors.white,
-        snackPosition: SnackPosition.TOP,
-      );
-    }
-  });
+    });
 
-  // Force la connexion si elle n'est pas active
-  if (!socket!.connected) {
-    socket!.connect();
+    // On s'assure qu'on n'a pas de doublons d'écouteurs
+    socket!.off('notification');
+
+    socket!.on('notification', (data) {
+      debugPrint('🔔 SIGNAL REÇU !');
+      if (mounted) {
+        setState(() {
+          hasNotification = true;
+          _notificationCount++;
+          notificationHistory.insert(0, Map<String, dynamic>.from(data));
+        });
+        Get.snackbar(
+          data['title'] ?? "Nouveau",
+          data['message'] ?? "Proposition reçue",
+          backgroundColor: Colors.white,
+          snackPosition: SnackPosition.TOP,
+        );
+      }
+    });
+
+    // Force la connexion si elle n'est pas active
+    if (!socket!.connected) {
+      socket!.connect();
+    }
   }
-}
 
   @override
   void dispose() {
@@ -261,33 +292,59 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                onPressed: () {
-                  setState(() => hasNotification = false);
-                  // --- Redirection vers la page de liste ---
-               Get.to(() => NotificationsScreen(
-
-));
-                },
-                icon: const Icon(Icons.notifications_none_outlined, size: 28),
-              ),
-              if (hasNotification)
-                Positioned(
-                  right: 12,
-                  top: 12,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  onPressed: () {
+                    setState(() => hasNotification = false);
+                    _notificationCount = 0;
+                    Get.to(() => const NotificationsScreen());
+                     _loadNotificationCount();
+                  },
+                  icon: Icon(
+                    Icons.notifications_rounded,
+                    size: 28,
+                    color: hasNotification
+                        ? const Color(0xFF2196F3)
+                        : Colors.grey.shade500,
                   ),
                 ),
-            ],
+                if (hasNotification && _notificationCount > 0)
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      child: Center(
+                        child: Text(
+                          _notificationCount > 9
+    ? "9+"
+    : "$_notificationCount",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
           IconButton(
             onPressed: () => Get.to(() => ProfileScreen(email: widget.email)),
@@ -657,23 +714,27 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       final oData = item["owner"];
       receiverId = (oData is Map) ? oData["_id"] : oData;
-      receiverName =
-          (oData is Map) ? (oData["name"] ?? "Client") : "Client";
+      receiverName = (oData is Map) ? (oData["name"] ?? "Client") : "Client";
     }
 
     if (receiverId != null) {
-      Get.to(() => ChatScreen(
-            currentUserId: currentUserId,
-            receiverId: receiverId!,
-            receiverName: receiverName,
-            projectId: item["_id"].toString(),
-          ));
+      Get.to(
+        () => ChatScreen(
+          currentUserId: currentUserId,
+          receiverId: receiverId!,
+          receiverName: receiverName,
+          projectId: item["_id"].toString(),
+        ),
+      );
     } else {
       Get.snackbar("Erreur", "Impossible de trouver l'interlocuteur.");
     }
   }
 
   Widget _buildFreelancerMissionCard(dynamic item) {
+    final owner = item['owner'] is Map ? item['owner'] : {};
+    final String clientName = owner['name'] ?? "Client";
+    final String? clientAvatar = owner['avatar'];
     final title = item["title"] ?? "Sans titre";
     final desc = (item["description"] ?? "").toString();
     final status = item["status"]?.toString();
@@ -685,8 +746,7 @@ class _HomeScreenState extends State<HomeScreen> {
         proposalStatus == "pending" || proposalStatus == "accepted";
     final bool canPostuler = !isRejected && !hasActiveProposal;
 
-    final bool proposalAccepted =
-        proposalStatus == "accepted";
+    final bool proposalAccepted = proposalStatus == "accepted";
     final chatEnabled = proposalAccepted;
     final chatColor = chatEnabled
         ? const Color(0xFF059669)
@@ -700,23 +760,53 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 🔥 ICI tu ajoutes le nouveau HEADER (avatar + nom + date + status)
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: _statusBadge(status)),
-                if (posted.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Icon(Icons.schedule_rounded,
-                      size: 15, color: Colors.grey[500]),
-                  const SizedBox(width: 4),
-                  Text(
-                    posted,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: skyBlue.withValues(alpha: 0.2),
+                  backgroundImage:
+                      (clientAvatar != null && clientAvatar.isNotEmpty)
+                      ? NetworkImage("${ApiConfig.origin}/$clientAvatar")
+                      : null,
+
+                  // 🔥 IMPORTANT : gérer erreur image
+                  onBackgroundImageError: (_, __) {
+                    debugPrint("❌ Image avatar non chargée");
+                  },
+
+                  child: (clientAvatar == null || clientAvatar.isEmpty)
+                      ? Text(
+                          clientName.isNotEmpty
+                              ? clientName[0].toUpperCase()
+                              : "?",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue,
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      clientName,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      posted,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                _statusBadge(status),
               ],
             ),
             const SizedBox(height: 12),
@@ -766,14 +856,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         ? () async {
                             final token = await AuthService.getToken();
                             if (token != null && mounted) {
-                              final sent = await Get.to<bool>(() =>
-                                  SendProposalScreen(
-                                    projectId: item["_id"].toString(),
-                                    token: token,
-                                    projectTitle:
-                                        title?.toString() ?? 'Sans titre',
-                                    clientBudget: _budgetAsInt(item["budget"]),
-                                  ));
+                              final sent = await Get.to<bool>(
+                                () => SendProposalScreen(
+                                  projectId: item["_id"].toString(),
+                                  token: token,
+                                  projectTitle:
+                                      title?.toString() ?? 'Sans titre',
+                                  clientBudget: _budgetAsInt(item["budget"]),
+                                ),
+                              );
                               if (sent == true && mounted) {
                                 await _reloadProjects();
                               }
@@ -781,17 +872,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           }
                         : null,
                     icon: Icon(
-                      canPostuler
-                          ? Icons.send_rounded
-                          : Icons.block_rounded,
+                      canPostuler ? Icons.send_rounded : Icons.block_rounded,
                       size: 20,
                     ),
                     label: Text(
                       isRejected
                           ? 'Proposition refusée'
                           : hasActiveProposal
-                              ? 'Proposition envoyée'
-                              : 'Postuler',
+                          ? 'Proposition envoyée'
+                          : 'Postuler',
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: canPostuler
@@ -818,11 +907,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(12),
                     onTap: chatEnabled
                         ? () => _openMissionChat(
-                              item,
-                              isClient: false,
-                              isRejected: isRejected,
-                              isAccepted: item["acceptedFreelancer"] != null,
-                            )
+                            item,
+                            isClient: false,
+                            isRejected: isRejected,
+                            isAccepted: item["acceptedFreelancer"] != null,
+                          )
                         : null,
                     child: SizedBox(
                       width: 52,
@@ -881,8 +970,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     const PopupMenuItem(
                       value: 'delete',
                       child: ListTile(
-                        leading: Icon(Icons.delete_outline_rounded,
-                            color: Colors.red),
+                        leading: Icon(
+                          Icons.delete_outline_rounded,
+                          color: Colors.red,
+                        ),
                         title: Text("Supprimer"),
                         contentPadding: EdgeInsets.zero,
                       ),
@@ -890,7 +981,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                   child: Padding(
                     padding: const EdgeInsets.only(left: 4),
-                    child: Icon(Icons.more_horiz_rounded, color: Colors.grey[600]),
+                    child: Icon(
+                      Icons.more_horiz_rounded,
+                      color: Colors.grey[600],
+                    ),
                   ),
                 ),
               ],
@@ -942,7 +1036,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: const Text('Voir les propositions'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: lancyPurple,
-                      side: BorderSide(color: lancyPurple.withValues(alpha: 0.65)),
+                      side: BorderSide(
+                        color: lancyPurple.withValues(alpha: 0.65),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -962,11 +1058,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
                     onTap: () => _openMissionChat(
-                          item,
-                          isClient: true,
-                          isRejected: isRejected,
-                          isAccepted: isAccepted,
-                        ),
+                      item,
+                      isClient: true,
+                      isRejected: isRejected,
+                      isAccepted: isAccepted,
+                    ),
                     child: SizedBox(
                       width: 52,
                       height: 52,
@@ -1083,5 +1179,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
-  

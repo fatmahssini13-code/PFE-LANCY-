@@ -26,6 +26,11 @@ const projectSchema = new mongoose.Schema({
     ref: "User",
     default: null,
   },
+  delivery: {
+  message: { type: String },
+  file: { type: String }, // URL du fichier ou lien Drive
+  deliveredAt: { type: Date }
+},
   escrowAmount: { type: Number, default: 0 },
 }, { timestamps: true });
 

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 import 'package:pfe/service/project_service.dart';
 
 class FreelancerProjectScreen extends StatefulWidget {
@@ -71,4 +71,4 @@ class _FreelancerProjectScreenState extends State<FreelancerProjectScreen> {
       ),
     );
   }
-}
+}*/

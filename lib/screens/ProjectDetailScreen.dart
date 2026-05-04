@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pfe/screens/payment_screen.dart';
 import 'package:pfe/screens/send_proposal_screen.dart';
 import 'package:pfe/service/auth_service.dart';
 
 class ProjectDetailScreen extends StatelessWidget {
   final dynamic project;
 
-  const ProjectDetailScreen({super.key, required this.project});
+  const ProjectDetailScreen({super.key, required this.project, required String userRole});
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +325,7 @@ class ProjectDetailScreen extends StatelessWidget {
                                 m["userProposalStatus"] = "pending";
                                 Get.off(
                                   () =>
-                                      ProjectDetailScreen(project: m),
+                                      ProjectDetailScreen(project: m, userRole: '',),
                                 );
                               }
                             }
@@ -364,6 +365,52 @@ class ProjectDetailScreen extends StatelessWidget {
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16),
                               ),
+                              const SizedBox(height: 24),
+                              if (project["status"] == "accepted") ...[
+  SizedBox(
+    width: double.infinity,
+    height: 55,
+    child: ElevatedButton(
+      onPressed: () {
+        final String currentProjectTitle = project["title"] ?? "Projet";
+        final dynamic currentClient = project["owner"] ?? project["clientId"];
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            
+            builder: (_) => PaymentScreen(
+           projectId: project["_id"].toString(),
+          amount: project["price"],
+          projectTitle: currentProjectTitle, // Récupère "test"
+          client: currentClient,           // Récupère l'objet de Fatma
+          freelancer: project["selectedFreelancer"],// Envoie l'objet freelancer complet (Map)
+          ),
+          ),
+        );
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.purple,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.payment, color: Colors.white),
+          SizedBox(width: 8),
+          Text(
+            "Payer 💳",
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+]
                             ],
                           ),
                         ),

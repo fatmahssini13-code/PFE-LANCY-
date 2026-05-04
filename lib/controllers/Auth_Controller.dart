@@ -2,7 +2,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:pfe/config/api_config.dart';
 import 'package:pfe/service/auth_service.dart';
- // <--- VÉRIFIE BIEN LE "S" ICI
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthController extends GetxController {
@@ -67,8 +67,7 @@ class AuthController extends GetxController {
   }
   Future<bool> checkUserValidity() async {
   try {
-    // نبعثو requête بسيطة للبروفيل
-    // لو الـ Backend رجع 401 أو 404، يعني الـ User ممسوح
+    
     final response = await http.get(
       Uri.parse("${ApiConfig.baseURL}/auth/profile"),
       headers: {"Authorization": "Bearer ${await AuthService.getToken()}"},

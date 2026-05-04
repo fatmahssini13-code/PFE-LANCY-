@@ -66,5 +66,20 @@ router.get("/my", requireAuth, async (req, res) => {
 // DELIVER PROJECT
 // =======================
 router.put("/:id/deliver", requireAuth, projectController.deliverProject);
+router.get("/:id", optionalAuth, async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id)
+      .populate("owner", "name email") // Récupère le nom du client
+      .populate("acceptedFreelancer", "name email"); // Récupère le nom du freelancer
 
+    if (!project) {
+      return res.status(404).json({ message: "Projet non trouvé" });
+    }
+
+    res.json(project);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+router.put("/approve/:id", requireAuth, projectController.approveAndReleaseFunds);
 module.exports = router;

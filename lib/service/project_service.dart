@@ -102,13 +102,9 @@ class ProjectService {
   // ===============================
   // 📦 DELIVER WORK
   // ===============================
-  Future<bool> deliverProject(
-    String projectId,
-    String message,
-  ) async {
+ Future<bool> deliverProject(String projectId, String link, String message) async {
     try {
       final token = await AuthService.getToken();
-
       final res = await http.put(
         Uri.parse("${ApiConfig.baseURL}/projects/$projectId/deliver"),
         headers: {
@@ -116,14 +112,13 @@ class ProjectService {
           "Authorization": "Bearer $token",
         },
         body: jsonEncode({
+          "link": link,
           "message": message,
         }),
       );
-
-      print("DELIVER STATUS: ${res.statusCode}");
       return res.statusCode == 200;
     } catch (e) {
-      print("❌ DELIVER ERROR: $e");
+      print("Error delivering: $e");
       return false;
     }
   }
@@ -149,4 +144,22 @@ class ProjectService {
       return false;
     }
   }
+ Future<Map<String, dynamic>> createPaymentIntent(String projectId) async {
+  // Récupère le token pour que le serveur sache qui paie
+  final token = await AuthService.getToken();
+
+  final response = await http.post(
+    Uri.parse("${ApiConfig.baseURL}/payment/create-intent"),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer $token", // Ajoute cette ligne
+    },
+    body: jsonEncode({
+      "projectId": projectId,
+    }),
+  );
+
+  return jsonDecode(response.body);
+}
+
 }

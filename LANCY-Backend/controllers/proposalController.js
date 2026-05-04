@@ -34,17 +34,27 @@ const createProposal = async (req, res) => {
       status: "pending",
     });
 
+    // ✅ Notification → client
     const notif = await Notification.create({
       userId: project.owner._id,
       title: "Nouvelle proposition 💼",
-      message: `${req.user.name} a envoyé une proposition`,
+      message: `${req.user.name} a envoyé une proposition pour : "${project.title}"`,
     });
 
-    const io = req.app.get("io");
-    if (io) io.to(project.owner._id.toString()).emit("notification", notif);
+    // ✅ "socketio" au lieu de "io"
+    const io = req.app.get("socketio");
+    if (io) {
+      const roomId = project.owner._id.toString();
+      console.log(`🚀 Notification envoyée à room : ${roomId}`);
+      io.to(roomId).emit("notification", {
+        title: notif.title,
+        message: notif.message,
+      });
+    }
 
     res.status(201).json({ message: "Proposition envoyée", proposal });
   } catch (err) {
+    console.log("❌ Erreur createProposal:", err.message);
     res.status(500).json({ message: err.message });
   }
 };
@@ -63,7 +73,7 @@ const getProjectProposals = async (req, res) => {
     }
 
     const proposals = await Proposal.find({ project: req.params.id })
-      .populate("freelancer", "name email")
+      .populate("freelancer", "name email avatar")
       .populate("project");
 
     res.json(proposals);
@@ -77,7 +87,9 @@ const getProjectProposals = async (req, res) => {
 // =======================
 const acceptProposal = async (req, res) => {
   try {
-    const proposal = await Proposal.findById(req.params.id).populate("project");
+    const proposal = await Proposal.findById(req.params.id)
+      .populate("project")
+      .populate("freelancer", "name email");
 
     if (!proposal || !proposal.project) {
       return res.status(404).json({ message: "Proposition introuvable" });
@@ -88,9 +100,9 @@ const acceptProposal = async (req, res) => {
       projectRef.owner?._id?.toString?.() ?? projectRef.owner?.toString();
 
     if (!ownerId || ownerId !== req.user._id.toString()) {
-      return res
-        .status(403)
-        .json({ message: "Action réservée au client propriétaire" });
+      return res.status(403).json({
+        message: "Action réservée au client propriétaire",
+      });
     }
 
     if (proposal.status !== "pending") {
@@ -98,9 +110,9 @@ const acceptProposal = async (req, res) => {
     }
 
     const clientId = projectRef.owner;
-    const freelancerId =
-      proposal.freelancer?._id ?? proposal.freelancer;
+    const freelancerId = proposal.freelancer?._id ?? proposal.freelancer;
 
+    // Wallet escrow
     let clientWallet = await Wallet.findOne({ userId: clientId });
     if (!clientWallet) {
       clientWallet = await Wallet.create({
@@ -137,8 +149,29 @@ const acceptProposal = async (req, res) => {
     projectDoc.selectedProposal = proposal._id;
     await projectDoc.save();
 
+    // ✅ Notification → freelancer
+    const clientName = req.user.name || "Le client";
+    const notifData = {
+      title: "Proposition acceptée ! 🎉",
+      message: `${clientName} a accepté votre proposition`,
+    };
+
+    await Notification.create({
+      userId: freelancerId,
+      ...notifData,
+    });
+
+    // ✅ "socketio" au lieu de "io"
+    const io = req.app.get("socketio");
+    if (io) {
+      const roomId = freelancerId.toString();
+      console.log(`🚀 Notification acceptée → room : ${roomId}`);
+      io.to(roomId).emit("notification", notifData);
+    }
+
     res.json({ message: "Projet démarré 💰 escrow activé" });
   } catch (err) {
+    console.log("❌ Erreur acceptProposal:", err.message);
     res.status(500).json({ message: err.message });
   }
 };
@@ -148,7 +181,9 @@ const acceptProposal = async (req, res) => {
 // =======================
 const rejectProposal = async (req, res) => {
   try {
-    const proposal = await Proposal.findById(req.params.id).populate("project");
+    const proposal = await Proposal.findById(req.params.id)
+      .populate("project")
+      .populate("freelancer", "name email");
 
     if (!proposal || !proposal.project) {
       return res.status(404).json({ message: "Proposition introuvable" });
@@ -159,9 +194,9 @@ const rejectProposal = async (req, res) => {
       proposal.project.owner?.toString();
 
     if (!ownerId || ownerId !== req.user._id.toString()) {
-      return res
-        .status(403)
-        .json({ message: "Action réservée au client propriétaire" });
+      return res.status(403).json({
+        message: "Action réservée au client propriétaire",
+      });
     }
 
     if (proposal.status !== "pending") {
@@ -171,8 +206,32 @@ const rejectProposal = async (req, res) => {
     proposal.status = "rejected";
     await proposal.save();
 
+    // ✅ Notification → freelancer
+    const clientName = req.user.name || "Le client";
+    const freelancerId =
+      proposal.freelancer?._id ?? proposal.freelancer;
+
+    const notifData = {
+      title: "Proposition refusée",
+      message: `${clientName} a refusé votre proposition`,
+    };
+
+    await Notification.create({
+      userId: freelancerId,
+      ...notifData,
+    });
+
+    // ✅ "socketio" au lieu de "io"
+    const io = req.app.get("socketio");
+    if (io) {
+      const roomId = freelancerId.toString();
+      console.log(`🚀 Notification refusée → room : ${roomId}`);
+      io.to(roomId).emit("notification", notifData);
+    }
+
     res.json({ message: "Proposition refusée", proposal });
   } catch (err) {
+    console.log("❌ Erreur rejectProposal:", err.message);
     res.status(500).json({ message: err.message });
   }
 };

@@ -13,15 +13,18 @@ class NotificationService {
       );
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
-        return data.map((e) => {
-          'title': e['title'] ?? '',
-          'message': e['message'] ?? '',
-          'time': e['createdAt'] != null
-            ? _formatTime(e['createdAt'])
-            : '',
-          'isRead': e['isRead'] ?? false,
-          'isToday': e['createdAt'] != null ? _isToday(e['createdAt']) : false,
-        }).toList();
+        return data
+            .map(
+              (e) => {
+                'title': e['title'] ?? '',
+                'message': e['message'] ?? '',
+                'createdAt': e['createdAt'], // 🔥 AJOUT CRUCIAL
+                'time': _formatTime(e['createdAt']),
+                'isRead': e['isRead'] ?? false,
+                'isToday': _isToday(e['createdAt']),
+              },
+            )
+            .toList();
       }
       return [];
     } catch (e) {
@@ -29,11 +32,20 @@ class NotificationService {
       return [];
     }
   }
-  bool _isToday(String isoDate) {
-  final dt = DateTime.parse(isoDate).toLocal();
-  final now = DateTime.now();
-  return dt.year == now.year && dt.month == now.month && dt.day == now.day;
-}
+
+  bool _isToday(dynamic isoDate) {
+    if (isoDate == null) return false;
+
+    final dt = DateTime.tryParse(isoDate.toString());
+    if (dt == null) return false;
+
+    final local = dt.toLocal();
+    final now = DateTime.now();
+
+    return local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+  }
 
   Future<void> markAllRead(String token) async {
     try {
@@ -46,8 +58,13 @@ class NotificationService {
     }
   }
 
-  String _formatTime(String isoDate) {
-    final dt = DateTime.parse(isoDate).toLocal();
-    return "${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
+  String _formatTime(dynamic isoDate) {
+    if (isoDate == null) return '';
+
+    final dt = DateTime.tryParse(isoDate.toString());
+    if (dt == null) return '';
+
+    final local = dt.toLocal();
+    return "${local.hour}:${local.minute.toString().padLeft(2, '0')}";
   }
 }

@@ -7,14 +7,14 @@ import 'package:pfe/controllers/auth_controller.dart';
 import 'package:pfe/screens/home.dart';
 import 'package:pfe/service/auth_service.dart';
 import 'package:pfe/screens/splash/logo.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('fr_FR');
   await ApiConfig.ensureInitialized();
-
-  Get.put(AuthController());
-
+  Stripe.publishableKey ="pk_test_51TRggT239ygk1HexDY1jGLqUy5pp6acHEUbG9B1dcABYBNNDspbCsIGx2rO0Eo8p8Je9Ij2f0eFpGvmGMmGZTcg200UBdrRPS3";
+Stripe.publishableKey = ApiConfig.stripePublishableKey;
   final String? token = await AuthService.getToken();
   if (kDebugMode) {
     debugPrint("--- DÉMARRAGE APP : Token trouvé = $token ---");
@@ -22,6 +22,7 @@ void main() async {
 
   runApp(MyApp(hasSession: token != null && token.isNotEmpty));
 }
+
 
 class MyApp extends StatelessWidget {
   final bool hasSession;
@@ -42,6 +43,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+
 class _SessionLauncher extends StatefulWidget {
   const _SessionLauncher();
   @override
@@ -54,40 +56,45 @@ class _SessionLauncherState extends State<_SessionLauncher> {
     super.initState();
     _openHome();
   }
-Future<void> _openHome() async {
-  try {
-    // 1. On ajoute un timeout de 5 secondes max
-    // Si le serveur ne répond pas après 5s, on considère que le check a échoué
-    final bool isUserStillValid = await AuthService.checkUserExists()
-        .timeout(const Duration(seconds: 5), onTimeout: () => false);
 
-    if (!isUserStillValid) {
-      await AuthService.removeToken();
+  Future<void> _openHome() async {
+    try {
+      // 1. On ajoute un timeout de 5 secondes max
+      // Si le serveur ne répond pas après 5s, on considère que le check a échoué
+      final bool isUserStillValid = await AuthService.checkUserExists().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => false,
+      );
+
+      if (!isUserStillValid) {
+        await AuthService.removeToken();
+        if (!mounted) return;
+        Get.offAll(
+          () => const SplashPage(),
+        ); // On utilise Get pour nettoyer la pile
+        return;
+      }
+
+      // 2. Récupération des infos locales (stockées dans SharedPreferences/SecureStorage)
+      final email = await AuthService.getUserEmail();
+      final role = await AuthService.getUserRole();
+      final name = await AuthService.getUserName();
+  
       if (!mounted) return;
-      Get.offAll(() => const SplashPage()); // On utilise Get pour nettoyer la pile
-      return;
+
+      // 3. Navigation vers HomeScreen
+      Get.offAll(
+        () =>
+            HomeScreen(email: email ?? '', role: role ?? 'client', name: name),
+      );
+    } catch (e) {
+      debugPrint("Erreur réseau ou session : $e");
+      // En cas d'erreur (serveur éteint), on redirige vers le Splash/Login
+      if (!mounted) return;
+      Get.offAll(() => const SplashPage());
     }
-
-    // 2. Récupération des infos locales (stockées dans SharedPreferences/SecureStorage)
-    final email = await AuthService.getUserEmail();
-    final role = await AuthService.getUserRole();
-    final name = await AuthService.getUserName();
-
-    if (!mounted) return;
-
-    // 3. Navigation vers HomeScreen
-    Get.offAll(() => HomeScreen(
-          email: email ?? '',
-          role: role ?? 'client',
-          name: name,
-        ));
-  } catch (e) {
-    debugPrint("Erreur réseau ou session : $e");
-    // En cas d'erreur (serveur éteint), on redirige vers le Splash/Login
-    if (!mounted) return;
-    Get.offAll(() => const SplashPage());
   }
-}
+
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
@@ -97,7 +104,10 @@ Future<void> _openHome() async {
           children: [
             CircularProgressIndicator(color: Colors.pinkAccent),
             SizedBox(height: 20),
-            Text("Vérification de la session...", style: TextStyle(color: Colors.grey)),
+            Text(
+              "Vérification de la session...",
+              style: TextStyle(color: Colors.grey),
+            ),
           ],
         ),
       ),

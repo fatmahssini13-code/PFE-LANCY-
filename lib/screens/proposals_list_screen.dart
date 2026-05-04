@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:get/get_core/src/get_main.dart';
+import 'package:get/get_navigation/src/extension_navigation.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pfe/config/api_config.dart';
+import 'package:pfe/screens/payment_screen.dart';
+import 'package:pfe/screens/profilescreen.dart';
 import 'package:pfe/service/proposal_service.dart';
 import 'package:pfe/service/auth_service.dart';
 
@@ -17,7 +22,6 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
   List proposals = [];
   bool loading = true;
 
-  // Couleurs Lancy
   final Color lancyBlue = const Color(0xFF00AEEF);
   final Color lancyPurple = const Color(0xFF8E2DE2);
 
@@ -47,40 +51,19 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
     }
   }
 
-  // --- ACTIONS ---
-  String _proposalId(dynamic p) {
-    final raw = p['_id'];
-    if (raw == null) return '';
-    if (raw is String) return raw;
-    return raw.toString();
-  }
+  String _proposalId(dynamic p) => p['_id']?.toString() ?? '';
 
   String _freelancerName(dynamic p) {
     final f = p['freelancer'];
-    if (f is Map) {
-      final n = f['name']?.toString();
-      if (n != null && n.isNotEmpty) return n;
-    }
+    if (f is Map) return f['name']?.toString() ?? 'Freelance';
     return 'Freelance';
   }
 
   Future<void> handleAction(String id, bool isAccept) async {
-    if (id.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Identifiant de proposition invalide')),
-      );
-      return;
-    }
+    if (id.isEmpty) return;
 
     final token = await AuthService.getToken();
-    if (token == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session expirée — reconnectez-vous.')),
-      );
-      return;
-    }
+    if (token == null) return;
 
     if (isAccept) {
       final confirm = await _showConfirmDialog();
@@ -94,20 +77,11 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
     if (!mounted) return;
 
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-      if (isAccept) {
-        Navigator.pop(context, true);
-        return;
-      }
-      await load();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      load(); // On rafraîchit la liste pour voir le bouton "Payer"
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red.shade700,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
       );
     }
   }
@@ -122,7 +96,7 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Annuler")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: StadiumBorder()),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: const StadiumBorder()),
             onPressed: () => Navigator.pop(context, true),
             child: const Text("Accepter", style: TextStyle(color: Colors.white)),
           ),
@@ -171,9 +145,9 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
     String status = p["status"] ?? "pending";
     final String freelancerName = _freelancerName(p);
     final String pid = _proposalId(p);
-    final String initial =
-        freelancerName.isNotEmpty ? freelancerName[0].toUpperCase() : '?';
-
+    final String initial = freelancerName.isNotEmpty ? freelancerName[0].toUpperCase() : '?';
+final freelancer = p['freelancer'] is Map ? p['freelancer'] : {};
+    final String? avatarUrl = freelancer['avatar'];
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -188,13 +162,28 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: Avatar + Nom + Badge Statut
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: lancyBlue.withOpacity(0.1),
-                  child: Text(initial, style: TextStyle(color: lancyBlue, fontWeight: FontWeight.bold)),
-                ),
+      GestureDetector(
+onTap: () {
+  print("Navigation vers le profil de: $freelancerName");
+  // Utilise Get.to directement sans Navigator.push
+  Get.to(() => ProfileScreen(email: freelancer['email'])); 
+},
+  child: CircleAvatar(
+  radius: 22,
+  backgroundColor: Colors.blue.shade100, // Fond par défaut (ce qu'on voit sur ta capture)
+  backgroundImage: (freelancer['profilePicture'] != null && freelancer['profilePicture'].isNotEmpty)
+      ? NetworkImage(freelancer['profilePicture']) // Charge l'image si l'URL existe
+      : null, // Sinon, rien en background
+  child: (freelancer['profilePicture'] == null || freelancer['profilePicture'].isEmpty)
+      ? Text(
+          freelancer['name'][0].toUpperCase(), // Affiche l'initiale "E" si pas de photo
+          style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+        )
+      : null,
+)
+),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -209,31 +198,27 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
               ],
             ),
             const Divider(height: 30),
-            
-            // Lettre de motivation
             Text(
               "Lettre de motivation",
               style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey[800]),
             ),
             const SizedBox(height: 4),
             Text(
-              p["coverLetter"] ?? "",
+              p["coverLetter"] ?? "Aucun détail fourni.",
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(height: 1.5, color: Colors.black87),
             ),
             const SizedBox(height: 20),
-
-            // Détails Prix / Délai
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildDetailTile(Icons.payments_outlined, "${p["price"]} DT", "Budget proposé"),
-                _buildDetailTile(Icons.timer_outlined, "${p["deliveryTime"]} jours", "Délai"),
+                _buildDetailTile(Icons.payments_outlined, "${p["price"] ?? 0} DT", "Budget proposé"),
+                _buildDetailTile(Icons.timer_outlined, "${p["deliveryTime"] ?? 0} jours", "Délai"),
               ],
             ),
-            
-            // Actions si "pending"
+
+            // --- SECTION ACTIONS CORRIGÉE ---
             if (status == "pending") ...[
               const SizedBox(height: 20),
               Row(
@@ -261,8 +246,34 @@ class _ProposalsListScreenState extends State<ProposalsListScreen> {
                     ),
                   ),
                 ],
-              )
-            ]
+              ),
+            ] else if (status == "accepted") ...[
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PaymentScreen(
+                          projectId: widget.projectId,
+                          amount: p["price"], projectTitle: '', client: null, freelancer: null,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.account_balance_wallet, color: Colors.white),
+                  label: const Text("Procéder au paiement séquestre", 
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

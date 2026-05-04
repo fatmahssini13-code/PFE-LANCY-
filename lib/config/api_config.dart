@@ -3,9 +3,9 @@ import 'package:flutter/foundation.dart';
 
 class ApiConfig {
   // 1. Ton IP fixe (PC) et le port de ton serveur Node.js
-  // static const String _lanDevHost = '192.168.100.13';
+  static const String _lanDevHost = '192.168.100.13';
   //static const String _lanDevHost = '192.168.1.100';
-  static const String _lanDevHost = '10.152.12.126';
+ // static const String _lanDevHost = '10.152.12.126';
   static const int apiPort = 5001; 
 
   static String _host = '127.0.0.1';
@@ -39,7 +39,7 @@ class ApiConfig {
       print('🔗 Base URL : http://$_host:$apiPort/api');
     }
   }
-
+static const String stripePublishableKey = "pk_test_51TRggT239ygk1HexDY1jGLqUy5pp6acHEUbG9B1dcABYBNNDspbCsIGx2rO0Eo8p8Je9Ij2f0eFpGvmGMmGZTcg200UBdrRPS3";
   /// URL pour les requêtes HTTP classiques (Auth, Projets, etc.)
   static String get baseURL => 'http://$_host:$apiPort/api';
 

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:pfe/config/api_config.dart';
 import 'package:pfe/service/notification_service.dart';
 import 'package:pfe/service/auth_service.dart';
 
@@ -20,6 +23,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     _loadNotifications();
+    markAllAsRead();
+  }
+
+  Future<void> markAllAsRead() async {
+    final token = await AuthService.getToken();
+
+    await http.put(
+      Uri.parse("${ApiConfig.baseURL}/notifications/read-all"),
+      headers: {"Authorization": "Bearer $token"},
+    );
   }
 
   Future<void> _loadNotifications() async {
@@ -76,8 +89,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: Text("Notifications",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 18)),
+        title: Text(
+          "Notifications",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 18),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -88,7 +103,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: Text(
               "Tout marquer lu",
               style: GoogleFonts.inter(
-                  color: lancyPurple, fontSize: 12, fontWeight: FontWeight.w500),
+                color: lancyPurple,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -96,31 +114,70 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: _loading
           ? Center(child: CircularProgressIndicator(color: lancyPurple))
           : _notifications.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  color: lancyPurple,
-                  onRefresh: _loadNotifications,
-                  child: ListView.builder(
-                    itemCount: _notifications.length,
-                    itemBuilder: (context, index) {
-                      // Séparateur de date
-                      final notif = _notifications[index];
-                      final showTodayHeader = index == 0;
-                      final showYesterdayHeader = index > 0 &&
-                          _notifications[index - 1]['isToday'] == true &&
-                          notif['isToday'] != true;
+          ? _buildEmptyState()
+          : RefreshIndicator(
+              color: lancyPurple,
+              onRefresh: _loadNotifications,
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (showTodayHeader) _buildDateHeader("Aujourd'hui"),
-                          if (showYesterdayHeader) _buildDateHeader("Hier"),
-                          _buildNotifCard(notif),
-                        ],
-                      );
-                    },
-                  ),
-                ),
+              child: ListView.builder(
+                itemCount: _notifications.length,
+    itemBuilder: (context, index) {
+  final notif = _notifications[index];
+
+  final createdAt = notif['createdAt'];
+  if (createdAt == null) return const SizedBox();
+
+  final date = DateTime.tryParse(createdAt.toString());
+  if (date == null) return const SizedBox();
+
+  final now = DateTime.now();
+
+  final isToday =
+      date.year == now.year &&
+      date.month == now.month &&
+      date.day == now.day;
+
+  final yesterday = now.subtract(const Duration(days: 1));
+  final isYesterday =
+      date.year == yesterday.year &&
+      date.month == yesterday.month &&
+      date.day == yesterday.day;
+
+  bool showHeader = false;
+  String headerText = "";
+
+  if (index == 0) {
+    showHeader = true;
+  } else {
+    final prevCreatedAt = _notifications[index - 1]['createdAt'];
+    final prevDate = DateTime.tryParse(prevCreatedAt.toString());
+
+    if (prevDate == null ||
+        date.day != prevDate.day ||
+        date.month != prevDate.month ||
+        date.year != prevDate.year) {
+      showHeader = true;
+    }
+  }
+
+  if (showHeader) {
+    headerText = isToday
+        ? "Aujourd'hui"
+        : isYesterday
+        ? "Hier"
+        : DateFormat('dd/MM/yyyy').format(date);
+  }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (showHeader) _buildDateHeader(headerText),
+      _buildNotifCard(notif),
+    ],
+  );
+}
+              ),
+            ),
     );
   }
 
@@ -141,7 +198,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-Widget _buildNotifCard(Map<String, dynamic> notif) {
+  Widget _buildNotifCard(Map<String, dynamic> notif) {
     final type = _getType(notif['title'] ?? '');
     final isRead = notif['isRead'] ?? true;
     final initials = _getInitials(notif['message'] ?? '');
@@ -166,7 +223,10 @@ Widget _buildNotifCard(Map<String, dynamic> notif) {
         avatarChild = Text(
           initials,
           style: GoogleFonts.poppins(
-              color: Colors.white, fontWeight: FontWeight.w500, fontSize: 15),
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+            fontSize: 15,
+          ),
         );
         cardBg = isRead ? Colors.white : const Color(0xFFEEEDFE);
     }
@@ -187,10 +247,7 @@ Widget _buildNotifCard(Map<String, dynamic> notif) {
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(
-              color: avatarBg,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: avatarBg, shape: BoxShape.circle),
             child: Center(child: avatarChild),
           ),
           const SizedBox(width: 12),
@@ -241,7 +298,9 @@ Widget _buildNotifCard(Map<String, dynamic> notif) {
                   const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: lancyPurple,
                       borderRadius: BorderRadius.circular(99),
@@ -249,9 +308,10 @@ Widget _buildNotifCard(Map<String, dynamic> notif) {
                     child: Text(
                       "Nouvelle",
                       style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500),
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -262,19 +322,27 @@ Widget _buildNotifCard(Map<String, dynamic> notif) {
       ),
     );
   }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.notifications_off_outlined,
-              size: 80, color: Colors.grey[300]),
+          Icon(
+            Icons.notifications_off_outlined,
+            size: 80,
+            color: Colors.grey[300],
+          ),
           const SizedBox(height: 12),
-          Text("Aucune notification",
-              style: GoogleFonts.inter(color: Colors.grey, fontSize: 16)),
+          Text(
+            "Aucune notification",
+            style: GoogleFonts.inter(color: Colors.grey, fontSize: 16),
+          ),
           const SizedBox(height: 6),
-          Text("Vous serez notifié ici",
-              style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13)),
+          Text(
+            "Vous serez notifié ici",
+            style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
+          ),
         ],
       ),
     );
