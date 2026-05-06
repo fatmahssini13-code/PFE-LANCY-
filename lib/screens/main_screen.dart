@@ -1,4 +1,4 @@
-/*import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:pfe/screens/ProjectDetailScreen.dart';
 import 'home.dart'; // Ta page d'accueil
  // Ta page de liste
@@ -19,7 +19,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     // Liste des pièces (écrans)
     final List<Widget> pages = [
-      const HomeScreen(email: '', role: '',), 
+      HomeScreen(role: widget.role, email: '',),
       ProjectDetailScreen(userRole: widget.role, project: null,), // La liste change selon le rôle
       const Center(child: Text("Mon Profil")),
     ];
@@ -53,4 +53,4 @@ class _MainScreenState extends State<MainScreen> {
       ),
     );
   }
-}*/
+}

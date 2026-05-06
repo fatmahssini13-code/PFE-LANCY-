@@ -50,25 +50,20 @@ private apiUrl = "http://192.168.100.13:5001";
         });
     }
   }
+verifyAdminOTP() {
+  const data = {
+    email: this.loginForm.value.email,
+    code: this.otpValue
+  };
 
-
-  // ÉTAPE 2 : Vérification du Code OTP
-  verifyAdminOTP() {
-    const data = { 
-      email: "fatmahssini3@gmail.com", 
-      code: this.otpValue 
-    };
-
-    // AJOUT DE /auth ICI AUSSI 👇
-    this.http.post(`${this.apiUrl}/api/auth/verify-otp`, data)
-      .subscribe({
-        next: (res: any) => {
-          localStorage.setItem('adminToken', res.token);
-          alert('Connexion réussie ! Bienvenue Fatma ✨');
-          this.router.navigate(['/dashboard']);
-        },
-        error: (err: any) => {
-          alert("Code OTP incorrect ou expiré ❌");
-        }
-      });
-  }}
+  this.http.post(`${this.apiUrl}/api/auth/verify-otp`, data)
+    .subscribe({
+      next: (res: any) => {
+        localStorage.setItem('adminToken', res.token);
+        this.router.navigate(['/dashboard']);
+      },
+      error: () => {
+        alert("Code OTP incorrect ou expiré ❌");
+      }
+    });
+}}

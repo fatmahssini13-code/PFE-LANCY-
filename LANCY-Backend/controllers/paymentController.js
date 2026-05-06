@@ -5,7 +5,11 @@ const Project = require("../models/project");
 exports.createPaymentIntent = async (req, res) => {
 try {
     const { projectId } = req.body;
+        console.log("📥 projectId reçu:", projectId); // ✅ log
+
     const project = await Project.findById(projectId);
+   console.log("📦 projet trouvé:", project?.title); // ✅ log
+    console.log("💰 budget:", project?.budget); // ✅ log
 
     if (!project) return res.status(404).json({ message: "Projet non trouvé" });
 

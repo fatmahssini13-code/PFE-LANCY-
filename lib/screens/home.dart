@@ -14,6 +14,7 @@ import 'package:pfe/service/home_service.dart';
 import 'package:pfe/service/auth_service.dart';
 import 'package:pfe/service/project_service.dart'; // Assure-toi que ce fichier contient update et delete
 import 'package:pfe/config/api_config.dart';
+import 'package:pfe/service/sockets_service.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class HomeScreen extends StatefulWidget {
@@ -54,8 +55,15 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _connectSocket();
       _loadNotificationCount();
+         _initSocket();
     });
   }
+  void _initSocket() async {
+  final userId = await AuthService.getUserId();
+  if (userId != null) {
+    SocketService().connect(userId);
+  }
+}
 
   Future<void> _loadNotificationCount() async {
     try {

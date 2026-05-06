@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:pfe/config/api_config.dart';
 import 'auth_service.dart';
-
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 class ProjectService {
 
   // ===============================
@@ -161,5 +162,32 @@ class ProjectService {
 
   return jsonDecode(response.body);
 }
+Future<bool> uploadDeliveryFile(
+  String projectId,
+  File? file,
+  String link,
+) async {
+  final token = await AuthService.getToken();
 
+  var request = http.MultipartRequest(
+    'PUT',
+    Uri.parse("${ApiConfig.baseURL}/projects/$projectId/deliver"),
+  );
+
+  request.headers['Authorization'] = "Bearer $token";
+
+  request.fields['link'] = link;
+
+  if (file != null) {
+    request.files.add(
+      await http.MultipartFile.fromPath('file', file.path),
+    );
+  }
+
+  var response = await request.send();
+
+  return response.statusCode == 200;
 }
+
+}      
+

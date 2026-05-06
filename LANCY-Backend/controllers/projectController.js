@@ -217,3 +217,32 @@ exports.adminReleaseOrRefund = async (req, res) => {
     res.status(500).json({ message: "Erreur Admin", error: error.message });
   }
 };
+const io = req.app.get("io");
+
+exports.deliverProject = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+
+    project.status = "delivered";
+    project.delivery = {
+      link: req.body.link,
+      message: req.body.message,
+    };
+
+    await project.save();
+
+    // 🔥 NOTIFICATION REAL-TIME
+    const clientId = project.owner.toString();
+
+    io.to(clientId).emit("notification", {
+      title: "Travail livré 📦",
+      message: "Le freelancer a livré votre projet",
+      projectId: project._id,
+    });
+
+    res.json({ message: "Travail livré ✅" });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

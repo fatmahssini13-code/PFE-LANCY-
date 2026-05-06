@@ -5,6 +5,7 @@ require("dotenv").config();
 const app = express();
 const { Server } = require('socket.io');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
 const connectDB = require("./config/db");
 const Message = require('./models/message');
 const Project = require("./models/project");
@@ -52,7 +53,7 @@ const server = http.createServer(app); // On crée le serveur à partir de app
 const io = new Server(server, {
     cors: { origin: "*" } 
 });
-app.set('io', io);
+const io = req.app.get("socketio");
 // 1. MIDDLEWARES
 app.use(cors());
 app.use(express.json());
@@ -179,8 +180,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// 3. IMPORTATION DES ROUTES
-// ... (le reste de ton code est correct)
 
 
 // 3. IMPORTATION DES ROUTES
@@ -202,7 +201,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/projects", projectsRoutes);
-app.use("/uploads", express.static("uploads"));
+
 
  app.use("/api/auth", (req,res,next)=>{
   console.log("AUTH ROUTE HIT:", req.url);
@@ -215,7 +214,12 @@ const MY_IP = "192.168.100.13";
 //const MY_IP = "192.168.1.100"; 
 const paymentRoutes = require("./routes/paymentRoutes");
 app.use("/api/payment", paymentRoutes);
+const io = req.app.get("io");
 
+io.to(project.acceptedFreelancer.toString()).emit("notification", {
+  title: "Mission démarrée 🚀",
+  message: "Le paiement est confirmé, vous pouvez commencer !",
+});
 connectDB()
     .then(() => {
         // IMPORTANT : Utiliser server.listen et non app.listen pour que Socket.io fonctionne
