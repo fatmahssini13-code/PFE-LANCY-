@@ -1,8 +1,15 @@
+<!-- users.component.html -->
 <div class="container">
 
-  <h2>Gestion des utilisateurs</h2>
+  <h2>👥 Gestion des utilisateurs</h2>
 
-  <div class="table-card">
+  <div *ngIf="loading" class="spinner-wrap">
+    <div class="spinner"></div>
+  </div>
+
+  <p *ngIf="error" class="error-text">{{ error }}</p>
+
+  <div class="table-card" *ngIf="!loading && !error">
 
     <table>
       <thead>
@@ -10,34 +17,50 @@
           <th>Nom</th>
           <th>Email</th>
           <th>Rôle</th>
-          <th>Action</th>
+          <th>Statut</th>
+          <th>Actions</th>
         </tr>
       </thead>
 
       <tbody>
         <tr *ngFor="let user of users">
+
           <td>{{ user.name }}</td>
           <td>{{ user.email }}</td>
 
           <td>
-            <span 
-              [ngClass]="{
-                'badge-client': user.role === 'client',
-                'badge-freelance': user.role === 'freelance'
-              }">
-              {{ user.role === 'client' ? 'Client' : 'Freelancer' }}
+            <span [ngClass]="{
+              'badge-client':     user.role === 'client',
+              'badge-freelancer': user.role === 'freelancer',
+              'badge-admin':      user.role === 'admin'
+            }">
+              {{ user.role | titlecase }}
             </span>
           </td>
 
-       <td>
-    <button (click)="deleteUser(user._id)" class="btn-delete">
-      Supprimer
-    </button>
-  </td>
+          <td>
+            <span [class]="user.isBlocked ? 'badge-blocked' : 'badge-active'">
+              {{ user.isBlocked ? 'Bloqué' : 'Actif' }}
+            </span>
+          </td>
+
+          <!-- Actions dans UNE SEULE colonne <td> -->
+          <td class="actions">
+            <button class="btn-block" (click)="toggleBlock(user._id)">
+              {{ user.isBlocked ? '✅ Débloquer' : '🚫 Bloquer' }}
+            </button>
+            <button class="btn-delete" (click)="deleteUser(user._id)">
+              🗑️ Supprimer
+            </button>
+          </td>
+
+        </tr>
+
+        <tr *ngIf="users.length === 0">
+          <td colspan="5" class="empty-row">Aucun utilisateur trouvé.</td>
         </tr>
       </tbody>
     </table>
 
   </div>
-
 </div>

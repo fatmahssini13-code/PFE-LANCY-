@@ -1,61 +1,95 @@
 const stripe = require("../config/stripe");
 const Project = require("../models/project");
-
+const User = require("../models/User"); 
 // 🟢 CREATE PAYMENT INTENT
 exports.createPaymentIntent = async (req, res) => {
-try {
+  try {
+
     const { projectId } = req.body;
-        console.log("📥 projectId reçu:", projectId); // ✅ log
 
     const project = await Project.findById(projectId);
-   console.log("📦 projet trouvé:", project?.title); // ✅ log
-    console.log("💰 budget:", project?.budget); // ✅ log
 
-    if (!project) return res.status(404).json({ message: "Projet non trouvé" });
-
-    // Vérification de sécurité pour éviter le crash .toString()
-    const freelancerId = project.acceptedFreelancer ? project.acceptedFreelancer.toString() : "aucun";
+    if (!project) {
+      return res.status(404).json({
+        message: "Projet introuvable"
+      });
+    }
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(project.budget * 100), // Force un nombre entier
+      amount: project.budget * 100,
       currency: "usd",
+
+      // ✅ IMPORTANT
       metadata: {
-        projectId: project._id.toString(),
-        freelancerId: freelancerId,
-      },
-      automatic_payment_methods: { enabled: true },
+        projectId: projectId
+      }
     });
 
-    res.json({ clientSecret: paymentIntent.client_secret });
-}catch (error) {
-    console.log("------ ❌ L'ERREUR EST ICI ------");
-  console.error(error); 
-  console.log("---------------------------------");
-    res.status(500).json({ error: error.message });
+    res.json({
+      clientSecret: paymentIntent.client_secret
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      message: err.message
+    });
   }
 };
 exports.releasePayment = async (req, res) => {
   try {
     const { projectId } = req.body;
-    const project = await Project.findById(projectId);
 
-    if (!project || !project.stripeAccountId) {
-        return res.status(400).json({ message: "Freelancer non connecté à Stripe" });
+    const project = await Project.findById(projectId)
+      .populate("acceptedFreelancer");
+
+    if (!project) {
+      return res.status(404).json({ message: "Projet non trouvé" });
     }
 
-    const transfer = await stripe.transfers.create({
-      amount: Math.round(project.budget * 100), // Sécurité arrondi
-      currency: "usd",
-      destination: project.stripeAccountId,
-    });
+    if (!project.acceptedFreelancer) {
+      return res.status(400).json({ message: "Freelancer manquant" });
+    }
 
+    // ❌ prevent double payment
+    if (project.escrowStatus === "released") {
+      return res.status(400).json({
+        message: "Paiement déjà libéré"
+      });
+    }
+
+    const freelancerId = project.acceptedFreelancer._id;
+
+    // 💸 wallet update
+    await User.findByIdAndUpdate(
+      freelancerId,
+      { $inc: { walletBalance: project.budget } }
+    );
+
+    // 🔓 update project
     project.escrowStatus = "released";
     project.status = "completed";
+    project.paymentStatus = "released";
+
     await project.save();
 
-    res.json({ message: "Paiement transféré ✅", transfer });
-  } catch (err) { // <--- Changé 'error' en 'err'
-    console.error(err); 
-    res.status(500).json({ error: err.message });
+    // 🔔 socket notification
+    const io = req.app.get("socketio");
+
+    if (io) {
+      io.to(freelancerId.toString()).emit("notification", {
+        title: "Paiement reçu 💸",
+        message: "Escrow libéré par le client",
+        projectId: project._id,
+      });
+    }
+
+    return res.json({
+      message: "Paiement libéré avec succès",
+      project,
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 };

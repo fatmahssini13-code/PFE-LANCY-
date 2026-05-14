@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pfe/screens/auth/ChooseRoleScreen.dart';
 import 'package:pfe/screens/auth/forgot_password_screen.dart';
 import 'package:pfe/screens/home.dart';
+import 'package:pfe/screens/main_screen.dart';
 import 'package:pfe/service/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -64,12 +65,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(email: email, role: role, name: name),
-        ),
-      );
+  Navigator.pushReplacement(
+  context,
+  MaterialPageRoute(
+    builder: (_) => MainScreen(email: email, role: role, name: name),
+  ),
+);
     } catch (e) {
       if (mounted) {
         setState(() => msg = _cleanError(e));

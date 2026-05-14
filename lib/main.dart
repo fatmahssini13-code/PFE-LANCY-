@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:pfe/config/api_config.dart';
 import 'package:pfe/controllers/auth_controller.dart';
 import 'package:pfe/screens/home.dart';
+import 'package:pfe/screens/main_screen.dart';
 import 'package:pfe/service/auth_service.dart';
 import 'package:pfe/screens/splash/logo.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
@@ -83,10 +84,7 @@ class _SessionLauncherState extends State<_SessionLauncher> {
       if (!mounted) return;
 
       // 3. Navigation vers HomeScreen
-      Get.offAll(
-        () =>
-            HomeScreen(email: email ?? '', role: role ?? 'client', name: name),
-      );
+      Get.offAll(() => MainScreen(email: email ?? '', role: role ?? 'client', name: name));
     } catch (e) {
       debugPrint("Erreur réseau ou session : $e");
       // En cas d'erreur (serveur éteint), on redirige vers le Splash/Login

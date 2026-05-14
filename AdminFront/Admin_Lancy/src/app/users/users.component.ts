@@ -1,38 +1,47 @@
 import { Component, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { AdminService } from '../services/admin.service';
+import { AdminService, User } from '../services/admin.service';
+
 @Component({
   selector: 'app-users',
   templateUrl: './users.component.html',
-  styleUrls: ['./users.component.css']
+  styleUrls: ['./users.component.css'],
 })
 export class UsersComponent implements OnInit {
 
-  users: any[] = [];
- 
+  users: User[] = [];
+  loading = true;
+  error   = '';
 
-  constructor(private http: HttpClient , private adminService: AdminService) {}
+  constructor(private adminService: AdminService) {}
 
   ngOnInit(): void {
-    this.getUsers();
+    this.loadUsers();
   }
 
-  getUsers() {
-    this.http.get<any[]>('http://localhost:5001/api/admin/users')
-      .subscribe(data => {
-        this.users = data;
-      });
+  loadUsers() {
+    this.loading = true;
+    this.adminService.getUsers().subscribe({
+      next:  (data) => { this.users = data; this.loading = false; },
+      error: (err)  => { this.error = err.message; this.loading = false; },
+    });
   }
-deleteUser(id: string) {
-    if (confirm('Voulez-vous vraiment supprimer cet utilisateur ?')) {
-      // Si 'adminService' n'est pas dans le constructor, cette ligne provoque l'erreur
-      this.adminService.deleteUser(id).subscribe({
-        next: () => {
-          this.users = this.users.filter(u => u._id !== id);
-          alert('Utilisateur supprimé');
-        },
-        error: (err: any) => console.error(err)
-      });
-    }
+
+  deleteUser(id: string) {
+    if (!confirm('Voulez-vous vraiment supprimer cet utilisateur ?')) return;
+
+    this.adminService.deleteUser(id).subscribe({
+      next:  () => { this.users = this.users.filter(u => u._id !== id); },
+      error: (err) => alert('Erreur : ' + err.message),
+    });
+  }
+
+  toggleBlock(id: string) {
+    this.adminService.toggleBlock(id).subscribe({
+      next: (res) => {
+        const u = this.users.find(u => u._id === id);
+        if (u) u.isBlocked = res.isBlocked;   // ← Mise à jour locale sans recharger
+      },
+      error: (err) => alert('Erreur : ' + err.message),
+    });
   }
 }

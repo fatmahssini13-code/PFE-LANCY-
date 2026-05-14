@@ -108,4 +108,69 @@ router.put("/:id/deliver", requireAuth, upload.single("file"), async (req, res) 
     res.status(500).json({ error: err.message });
   }
 });
+// =======================
+// FREELANCER — MES MISSIONS ACCEPTÉES
+// =======================
+router.get("/freelancer", requireAuth, async (req, res) => {
+  try {
+    const projects = await Project.find({ 
+      acceptedFreelancer: req.user._id,
+      status: { $in: ["in_progress", "delivered", "completed"] }
+    })
+      .populate("owner", "name email avatar")
+      .populate("acceptedFreelancer", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+// ========================
+// REFUSER LA LIVRAISON
+// ========================
+router.put("/:id/reject-delivery", requireAuth, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const project = await Project.findById(req.params.id)
+      .populate("acceptedFreelancer", "_id");
+
+    if (!project) {
+      return res.status(404).json({ message: "Projet non trouvé" });
+    }
+
+    // Remet le projet en cours
+    project.status   = "in_progress";
+    project.delivery = null;
+    await project.save();
+
+    // Notif socket au freelancer
+    const io = req.app.get("socketio");
+    if (io && project.acceptedFreelancer) {
+      io.to(project.acceptedFreelancer._id.toString()).emit("notification", {
+        title: "Livraison refusée ❌",
+        message: reason || "Le client a refusé votre livraison. Veuillez corriger et relivrer.",
+        projectId: project._id,
+      });
+    }
+
+    res.json({ message: "Livraison refusée", project });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+router.get("/stats", requireAuth, projectController.getStats);
+router.put(
+  "/refuse/:id",
+  requireAuth,
+  projectController.refuseDelivery
+);
+// UPDATE PROJECT
+router.put("/update/:id", requireAuth, projectController.updateProject);
+
+// DELETE PROJECT
+router.delete("/delete/:id", requireAuth, projectController.deleteProject);
 module.exports = router;

@@ -286,7 +286,10 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isClient = widget.role.toLowerCase() == "client";
 
     return Scaffold(
+       extendBody: true,
+  resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0xFFF8F9FA),
+
       appBar: AppBar(
         title: Text(
           "LANCY",
@@ -771,31 +774,23 @@ class _HomeScreenState extends State<HomeScreen> {
             // 🔥 ICI tu ajoutes le nouveau HEADER (avatar + nom + date + status)
             Row(
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: skyBlue.withValues(alpha: 0.2),
-                  backgroundImage:
-                      (clientAvatar != null && clientAvatar.isNotEmpty)
-                      ? NetworkImage("${ApiConfig.origin}/$clientAvatar")
-                      : null,
-
-                  // 🔥 IMPORTANT : gérer erreur image
-                  onBackgroundImageError: (_, __) {
-                    debugPrint("❌ Image avatar non chargée");
-                  },
-
-                  child: (clientAvatar == null || clientAvatar.isEmpty)
-                      ? Text(
-                          clientName.isNotEmpty
-                              ? clientName[0].toUpperCase()
-                              : "?",
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue,
-                          ),
-                        )
-                      : null,
-                ),
+           CircleAvatar(
+  radius: 18,
+  backgroundColor: skyBlue.withValues(alpha: 0.2),
+  backgroundImage: (clientAvatar != null && clientAvatar.isNotEmpty)
+      ? NetworkImage("${ApiConfig.origin}/$clientAvatar")
+      : null,
+  // ✅ onBackgroundImageError seulement si backgroundImage != null
+  onBackgroundImageError: (clientAvatar != null && clientAvatar.isNotEmpty)
+      ? (_, __) => debugPrint("❌ Avatar non chargé")
+      : null,
+  child: (clientAvatar == null || clientAvatar.isEmpty)
+      ? Text(
+          clientName.isNotEmpty ? clientName[0].toUpperCase() : "?",
+          style: const TextStyle(fontSize: 12, color: Colors.blue),
+        )
+      : null,
+),
                 const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

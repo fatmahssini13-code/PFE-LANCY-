@@ -22,7 +22,10 @@ const userSchema = new mongoose.Schema({
   // --- CHAMPS SPÉCIFIQUES CLIENT ---
   companyName: { type: String }, // Nom de l'entreprise ou "Particulier"
   location: { type: String },
-
+walletBalance: {
+  type: Number,
+  default: 0,
+},
   // --- PARAMÈTRES COMMUNS ---
   avatar: { type: String, default: "" }, // URL de la photo
   phoneNumber: { type: String },

@@ -4,7 +4,8 @@ const bcrypt = require("bcrypt"); // ✅ manquait !
 const multer = require("multer"); // ✅ une seule fois
 const path = require("path");     // ✅ une seule fois
 const fs = require("fs");         // ✅ une seule fois
-
+// Ajoute cette ligne en haut de userroutes.js
+const { requireAuth } = require("../middleware/authMiddleware");
 // Config multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -138,5 +139,25 @@ router.post("/upload-avatar/:email", upload.single("avatar"), async (req, res) =
     res.status(500).json({ message: err.message });
   }
 });
+router.get("/wallet", requireAuth, async (req, res) => {
+  const user = await User.findById(req.user._id).select("walletBalance");
+  res.json({ balance: user.walletBalance });
+});
+// Wallet — historique des projets payés
+router.get("/wallet", requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("walletBalance");
+    const projects = await Project.find({
+      acceptedFreelancer: req.user._id,
+      status: "completed"
+    }).select("title budget createdAt").sort({ createdAt: -1 });
 
+    res.json({
+      balance: user.walletBalance ?? 0,
+      transactions: projects
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 module.exports = router;

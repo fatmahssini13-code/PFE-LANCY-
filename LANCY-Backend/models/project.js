@@ -4,36 +4,50 @@ const projectSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
   budget: { type: Number, required: true },
-  owner: { // Assure-toi que c'est bien 'owner' ici
+
+  owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  status: { 
-    type: String, 
-    enum: ["open", "in_progress", "completed", "cancelled"], 
-    default: "open" 
+
+  status: {
+    type: String,
+    enum: ["open", "in_progress", "delivered", "completed", "cancelled", "disputed"],
+    default: "open"
   },
-  paymentStatus: { 
-    type: String, 
-    enum: ["unpaid", "escrow_locked", "released", "refunded"], 
-    default: "unpaid" 
+
+  dispute: {
+    isOpen: { type: Boolean, default: false },
+    reason: { type: String, default: '' },
+    openedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    openedAt: Date
   },
-  selectedProposal: { type: mongoose.Schema.Types.ObjectId, ref: "Proposal" },
-  /** Freelance retenu après acceptation d’une proposition */
-  acceptedFreelancer: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    default: null,
+
+  paymentStatus: {
+    type: String,
+    enum: ["not_locked", "escrow_locked", "released", "refunded"],
+    default: "not_locked"
   },
+
+  escrowStatus: {
+    type: String,
+    enum: ["not_locked", "locked", "released", "refunded"],
+    default: "locked"
+  },
+
   delivery: {
-  message: { type: String },
-  file: { type: String }, // URL du fichier ou lien Drive
-  deliveredAt: { type: Date }
-},
-  escrowAmount: { type: Number, default: 0 },
+    message: { type: String, default: "" },
+    file: { type: String, default: "" },
+    link: { type: String, default: "" },
+
+    status: {
+      type: String,
+      enum: ["pending", "delivered", "accepted", "refused"],
+      default: "pending"
+    }
+  },
+
+  escrowAmount: { type: Number, default: 0 }
 }, { timestamps: true });
-
-
-
-module.exports = mongoose.models.Project || mongoose.model('Project', projectSchema);
+module.exports = mongoose.models.Project || mongoose.model("Project", projectSchema);

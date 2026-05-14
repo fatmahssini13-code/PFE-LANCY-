@@ -1,77 +1,73 @@
-<div class="dashboard-layout">
-  <aside class="sidebar">
-    <div class="logo-section">
-      <img src="assets/lancy.jpg" alt="Lancy Logo">
-      <span>Lancy Admin</span>
+
+<div class="sidebar">
+
+  <h2 class="logo">LANCY</h2>
+  <p class="subtitle">Admin Panel</p>
+
+  <nav>
+
+    <a routerLink="/dashboard" routerLinkActive="active">🏠 Dashboard</a>
+    <a routerLink="/projects" routerLinkActive="active">💼 Projects</a>
+    <a routerLink="/escrow" routerLinkActive="active">🔒 Escrow</a>
+    <a routerLink="/disputes" routerLinkActive="active">⚖️ Disputes</a>
+    <a routerLink="/users" routerLinkActive="active">👤 Users</a>
+
+  </nav>
+
+</div>
+
+
+<div class="dashboard">
+
+  <!-- CARDS -->
+<div class="header-actions">
+  <button (click)="toggleDarkMode()" class="btn-theme">
+    <i class="fas" [ngClass]="isDarkMode ? 'fa-sun' : 'fa-moon'"></i>
+    {{ isDarkMode ? 'Mode Clair' : 'Mode Sombre' }}
+  </button>
+</div>
+  <div class="cards">
+
+    <div class="card blue">
+      <h3>Total Users</h3>
+      <p>{{ stats.users.total }}</p>
     </div>
 
-    <nav>
-      <a routerLink="/dashboard" routerLinkActive="active">
-        <span class="icon">📊</span> Dashboard
-      </a>
-      <a routerLink="/users" routerLinkActive="active">
-        <span class="icon">👥</span> Utilisateurs
-      </a>
-      <a routerLink="/projects" routerLinkActive="active">
-        <span class="icon">💼</span> Projets
-      </a>
-      <a routerLink="/escrow-management" routerLinkActive="active">
-        <span class="icon"></span> Gestion de l'Escrow
-      </a>
-      <a routerLink="/settings" routerLinkActive="active">
-        <span class="icon">⚙️</span> Paramètres
-      </a>
-    </nav>
-  </aside>
-
-  <main class="main-content">
-    
-    <header class="top-bar">
-      <div class="page-title">
-        <h2>Tableau de Bord</h2>
-        <p class="subtitle">Bienvenue sur votre gestionnaire Lancy</p>
-      </div>
-      
-      <div class="admin-actions">
-        <div class="admin-profile">
-          <span class="avatar">A</span>
-          <span class="name">Administrateur</span>
-        </div>
-      </div>
-    </header>
-
-    <div class="dashboard">
-      <div class="cards">
-        
-        <div class="card card-blue">
-          <div class="card-icon">👤</div>
-          <div class="card-info">
-            <h3>Total Users</h3>
-            <p class="stat">{{ stats?.users || 0 }}</p>
-          </div>
-        </div>
-
-        <div class="card card-purple">
-          <div class="card-icon">🧑‍💻</div>
-          <div class="card-info">
-            <h3>Freelancers</h3>
-            <p class="stat">{{ stats?.freelancers || 0 }}</p>
-          </div>
-        </div>
-
-        <div class="card card-cyan">
-          <div class="card-icon">🏢</div>
-          <div class="card-info">
-            <h3>Clients</h3>
-            <p class="stat">{{ stats?.clients || 0 }}</p>
-          </div>
-        </div>
-
-      </div>
-
-      <div class="recent-activity-section" style="margin-top: 30px;">
-        </div>
-      
+    <div class="card purple">
+      <h3>Clients</h3>
+      <p>{{ stats.users.clients }}</p>
     </div>
-  </main>
+
+    <div class="card cyan">
+      <h3>Freelancers</h3>
+      <p>{{ stats.users.freelancers }}</p>
+    </div>
+
+    <div class="card orange">
+      <h3>Escrow Total</h3>
+      <p>{{ stats.escrow.total }} DT</p>
+    </div>
+
+  </div>
+
+  <!-- BAR CHART -->
+
+  <div class="chart-card">
+
+    <h2>📊 Analyse des projets</h2>
+
+    <canvas #projectsChart></canvas>
+
+  </div>
+
+  <!-- PIE CHART -->
+
+  <div class="chart-card">
+
+    <h2>👥 Répartition des utilisateurs</h2>
+
+    <canvas #usersChart></canvas>
+
+  </div>
+
 </div>

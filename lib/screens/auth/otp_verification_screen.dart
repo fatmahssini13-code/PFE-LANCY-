@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart'; // Importation des widgets de base
 import 'package:google_fonts/google_fonts.dart'; // Police personnalisée
+import 'package:pfe/screens/main_screen.dart';
 import 'package:pfe/service/auth_service.dart'; // Logique API pour la vérification
 import 'reset_password_screen.dart'; // Destination si "Mot de passe oublié"
 import 'package:pfe/screens/home.dart'; // Destination si "Inscription réussie"
@@ -102,17 +103,17 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         final savedRole = await AuthService.getUserRole();
         final savedName = await AuthService.getUserName();
         if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => HomeScreen(
-              email: savedEmail ?? widget.email.trim().toLowerCase(),
-              role: savedRole ?? widget.role,
-              name: savedName,
-            ),
-          ),
-          (route) => false,
-        );
+  Navigator.pushAndRemoveUntil(
+  context,
+  MaterialPageRoute(
+    builder: (_) => MainScreen(
+      email: savedEmail ?? widget.email.trim().toLowerCase(),
+      role: savedRole ?? widget.role,
+      name: savedName,
+    ),
+  ),
+  (route) => false,
+);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Account verified! Welcome 🌸")),
         );

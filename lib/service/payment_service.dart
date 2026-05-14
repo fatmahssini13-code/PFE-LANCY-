@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:http/http.dart' as http;
 import 'package:pfe/config/api_config.dart';
+import 'package:pfe/service/auth_service.dart';
 
 class PaymentService {
   static Future<Map<String, dynamic>?> createPaymentIntent(String projectId, String token) async {
@@ -60,4 +61,27 @@ class PaymentService {
       }
     }
   }
+  Future<bool> releasePayment(String projectId) async {
+  try {
+    final token = await AuthService.getToken();
+
+    debugPrint("=== RELEASE projectId: $projectId ===");
+    debugPrint("=== URL: ${ApiConfig.baseURL}/payment/$projectId/release ===");
+
+    final res = await http.put(
+      Uri.parse("${ApiConfig.baseURL}/payment/$projectId/release"),
+      headers: {
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    debugPrint("=== STATUS: ${res.statusCode} ===");
+    debugPrint("=== BODY: ${res.body} ===");
+
+    return res.statusCode == 200;
+  } catch (e) {
+    debugPrint("❌ RELEASE ERROR: $e");
+    return false;
+  }
+}
 }

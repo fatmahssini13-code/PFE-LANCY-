@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:pfe/config/api_config.dart';
 import 'auth_service.dart';
@@ -59,6 +60,31 @@ class ProjectService {
       throw Exception(jsonDecode(res.body)["message"]);
     }
   }
+  Future<List<dynamic>> getMyProjects({required String role}) async {
+  try {
+    final token = await AuthService.getToken();
+   final endpoint = role == 'freelancer'
+        ? "${ApiConfig.baseURL}/projects/freelancer"
+        : "${ApiConfig.baseURL}/projects/my";
+
+    final res = await http.get(
+     Uri.parse(endpoint),
+      headers: {
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    } else {
+      print("❌ ERROR: ${res.body}");
+      return [];
+    }
+  } catch (e) {
+    print("❌ EXCEPTION: $e");
+    return [];
+  }
+}
 
   // ===============================
   // 🔴 DELETE PROJECT
@@ -103,48 +129,63 @@ class ProjectService {
   // ===============================
   // 📦 DELIVER WORK
   // ===============================
- Future<bool> deliverProject(String projectId, String link, String message) async {
-    try {
-      final token = await AuthService.getToken();
-      final res = await http.put(
-        Uri.parse("${ApiConfig.baseURL}/projects/$projectId/deliver"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-        body: jsonEncode({
-          "link": link,
-          "message": message,
-        }),
-      );
-      return res.statusCode == 200;
-    } catch (e) {
-      print("Error delivering: $e");
-      return false;
-    }
+Future<bool> deliverProject(String projectId, String link, String message) async {
+  try {
+    final token = await AuthService.getToken();
+    
+    debugPrint("=== DELIVER projectId: $projectId ===");
+    debugPrint("=== token: $token ===");
+    debugPrint("=== URL: ${ApiConfig.baseURL}/projects/$projectId/deliver ===");
+    
+    final res = await http.put(
+      Uri.parse("${ApiConfig.baseURL}/projects/$projectId/deliver"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode({
+        "link": link,
+        "message": message,
+      }),
+    );
+    
+    debugPrint("=== STATUS: ${res.statusCode} ===");
+    debugPrint("=== BODY: ${res.body} ===");
+    
+    return res.statusCode == 200;
+  } catch (e) {
+    debugPrint("❌ Error delivering: $e");
+    return false;
   }
-
+}
   // ===============================
   // 💸 RELEASE PAYMENT
   // ===============================
-  Future<bool> releasePayment(String projectId) async {
-    try {
-      final token = await AuthService.getToken();
+Future<bool> releasePayment(String projectId) async {
+  try {
+    final token = await AuthService.getToken();
 
-      final res = await http.put(
-        Uri.parse("${ApiConfig.baseURL}/payment/$projectId/release"),
-        headers: {
-          "Authorization": "Bearer $token",
-        },
-      );
+    // ✅ POST au lieu de PUT, projectId dans le body
+    final res = await http.post(
+      Uri.parse("${ApiConfig.baseURL}/payment/release"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode({
+        "projectId": projectId,  // ✅ dans le body
+      }),
+    );
 
-      print("RELEASE STATUS: ${res.statusCode}");
-      return res.statusCode == 200;
-    } catch (e) {
-      print("❌ RELEASE ERROR: $e");
-      return false;
-    }
+    debugPrint("=== RELEASE STATUS: ${res.statusCode} ===");
+    debugPrint("=== RELEASE BODY: ${res.body} ===");
+
+    return res.statusCode == 200;
+  } catch (e) {
+    debugPrint("❌ RELEASE ERROR: $e");
+    return false;
   }
+}
  Future<Map<String, dynamic>> createPaymentIntent(String projectId) async {
   // Récupère le token pour que le serveur sache qui paie
   final token = await AuthService.getToken();
@@ -188,6 +229,26 @@ Future<bool> uploadDeliveryFile(
 
   return response.statusCode == 200;
 }
+Future<Map<String, dynamic>> getProjectById(String id) async {
+  try {
+    final token = await AuthService.getToken();
 
-}      
+    final res = await http.get(
+      Uri.parse("${ApiConfig.baseURL}/projects/$id"),
+      headers: {
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    } else {
+      throw Exception("Failed to load project");
+    }
+  } catch (e) {
+    throw Exception("ERROR: $e");
+  }
+}
+}  
+    
 

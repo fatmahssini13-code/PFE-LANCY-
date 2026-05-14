@@ -1,37 +1,35 @@
 import { Component, OnInit } from '@angular/core';
-import { AdminService } from '../services/admin.service';
+import { AdminService, Project } from '../services/admin.service';
 
 @Component({
   selector: 'app-projects',
   templateUrl: './projects.component.html',
-  styleUrls: ['./projects.component.css']
+  styleUrls: ['./projects.component.css'],
 })
 export class ProjectsComponent implements OnInit {
-  projects: any[] = [];
+
+  projects: Project[] = [];
+  loading = true;
+  error   = '';
 
   constructor(private adminService: AdminService) {}
 
   ngOnInit(): void {
-  this.adminService.getProjects().subscribe({
-    next: (data) => {
-      this.projects = data;
-      console.log("Projets reçus :", data);
-    },
-    error: (err) => console.error("Erreur de chargement projets", err)
-  });
-}
-  deleteProject(id: string): void {
-    if (confirm('Voulez-vous vraiment supprimer ce projet ?')) {
-      this.adminService.deleteProject(id).subscribe({
-        next: () => {
-          // Supprime le projet de la liste localement pour mettre à jour l'affichage
-          this.projects = this.projects.filter(p => p._id !== id);
-          console.log('Projet supprimé avec succès');
-        },
-        error: (err) => {
-          console.error('Erreur lors de la suppression', err);
-        }
-      });
-    }
+    this.adminService.getProjects().subscribe({
+      next:  (data) => { this.projects = data; this.loading = false; },
+      error: (err)  => { this.error = err.message; this.loading = false; },
+    });
+  }
+
+  ownerName(p: Project): string  { return (p.owner as any)?.name  || 'Inconnu'; }
+  ownerEmail(p: Project): string { return (p.owner as any)?.email || ''; }
+
+  deleteProject(id: string) {
+    if (!confirm('Supprimer ce projet ?')) return;
+
+    this.adminService.deleteProject(id).subscribe({
+      next:  () => { this.projects = this.projects.filter(p => p._id !== id); },
+      error: (err) => alert('Erreur : ' + err.message),
+    });
   }
 }

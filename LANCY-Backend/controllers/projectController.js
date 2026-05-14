@@ -129,19 +129,7 @@ exports.deleteProject = async (req, res) => {
     res.status(500).json({ message: "Erreur suppression", error });
   }
 };
-exports.deliverProject = async (req, res) => {
-  const project = await Project.findById(req.params.id);
 
-  project.status = "delivered";
-  project.delivery = {
-    message: req.body.message,
-    file: req.body.file
-  };
-
-  await project.save();
-
-  res.json({ message: "Travail livré ✅" });
-};
 // Dans ton controller Node.js (projectController.js)
 const addProject = async (req, res) => {
     try {
@@ -217,32 +205,110 @@ exports.adminReleaseOrRefund = async (req, res) => {
     res.status(500).json({ message: "Erreur Admin", error: error.message });
   }
 };
-const io = req.app.get("io");
+
 
 exports.deliverProject = async (req, res) => {
   try {
+
     const project = await Project.findById(req.params.id);
 
+    if (!project) {
+      return res.status(404).json({ message: "Projet non trouvé" });
+    }
+
     project.status = "delivered";
+
     project.delivery = {
-      link: req.body.link,
       message: req.body.message,
+      link: req.body.link,
+      status: "delivered",
+      deliveredAt: new Date()
     };
 
     await project.save();
 
-    // 🔥 NOTIFICATION REAL-TIME
-    const clientId = project.owner.toString();
-
-    io.to(clientId).emit("notification", {
-      title: "Travail livré 📦",
-      message: "Le freelancer a livré votre projet",
-      projectId: project._id,
-    });
-
-    res.json({ message: "Travail livré ✅" });
+    return res.json({ message: "Travail livré ✅", project });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
+  }
+};
+// Exemple d'une fonction dans ton controller
+exports.updateProjectStatus = async (req, res) => {
+    try {
+        const project = await Project.findByIdAndUpdate(req.params.id, req.body, { new: true });
+
+        // ✅ C'est ICI qu'on récupère 'io' via 'req'
+        const io = req.app.get("socketio");
+        
+        if (io) {
+            io.to(project.owner.toString()).emit("notification", {
+                title: "Statut mis à jour",
+                message: `Le projet ${project.title} est passé en statut ${project.status}`
+            });
+        }
+
+        res.status(200).json(project);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+exports.getStats = async (req, res) => {
+  try {
+
+    const users = await User.find().select("name email role");
+    const projects = await Project.find();
+
+    return res.json({
+      users, // 🔥 LIST FULL USERS
+      projects: {
+        open: projects.filter(p => p.status === "open").length,
+        inProgress: projects.filter(p => p.status === "in_progress").length,
+        completed: projects.filter(p => p.status === "completed").length
+      }
+    });
+
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+exports.refuseDelivery = async (req, res) => {
+  try {
+    const { reason } = req.body;
+
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Projet non trouvé" });
+    }
+
+    if (project.status !== "delivered") {
+      return res.status(400).json({
+        message: "Le projet n'est pas encore livré"
+      });
+    }
+
+    // ✅ FIX CLEAN STRUCTURE
+    project.delivery = {
+      ...project.delivery,
+      status: "refused",
+      refusedReason: reason,
+      refusedAt: new Date()
+    };
+
+    // 🔁 يرجّع الخدمة للفريلانسر
+    project.status = "in_progress";
+
+    await project.save();
+
+    return res.status(200).json({
+      message: "Livraison refusée",
+      project
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message
+    });
   }
 };

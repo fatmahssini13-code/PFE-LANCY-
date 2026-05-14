@@ -1,5 +1,5 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const Project = require('../models/Project');
+const Project = require('../models/project');
 
 exports.processPayment = async (req, res) => {
   try {
@@ -25,5 +25,27 @@ exports.processPayment = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+exports.stripeWebhook = async (req, res) => {
+  const event = req.body;
 
+  if (event.type === "payment_intent.succeeded") {
+
+    const paymentIntent = event.data.object;
+    const projectId = paymentIntent.metadata.projectId;
+
+    const project = await Project.findById(projectId);
+
+    if (!project) return res.sendStatus(404);
+
+    // 🔒 HERE IS ESCROW LOCK
+    project.escrowStatus = "locked";
+    project.paymentStatus = "escrow_locked";
+
+    await project.save();
+
+    console.log("ESCROW LOCKED 🔒 for project:", projectId);
+  }
+
+  res.json({ received: true });
+};
 // Confirmation après succès sur Flutter

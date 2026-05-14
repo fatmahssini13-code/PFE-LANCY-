@@ -1,41 +1,52 @@
-const express = require('express');
-const router = express.Router();
-const User = require('../models/User'); 
-const Project = require('../models/Project');
+const express = require("express");
+const router  = express.Router();
 
-const userController = require('../controllers/usercontroller');
-const projectController = require('../controllers/projectController');
-const adminController = require('../controllers/adminController');
-// --- ROUTE 1 : OBTENIR LES STATISTIQUES (Pour le Dashboard) ---
-// Accessible via : GET /api/admin/stats
-const { requireAuth, isAdmin } = require('../middleware/authMiddleware');
-router.get('/stats', async (req, res) => {
+const adminController   = require("../controllers/adminController");
+const { requireAuth, isAdmin } = require("../middleware/authMiddleware");
+
+// Applique auth + rôle admin sur toutes les routes de ce fichier
+// router.use(requireAuth, isAdmin);   // ← Décommente en prod
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+// GET /api/admin/stats
+router.get("/stats", adminController.getStats);
+
+// ─── UTILISATEURS ─────────────────────────────────────────────────────────────
+// GET    /api/admin/users
+// DELETE /api/admin/users/:id
+// PUT    /api/admin/users/:id/toggle-block
+router.get("/users",                   adminController.getAllUsers);
+router.delete("/users/:id",            adminController.deleteUser);
+router.put("/users/:id/toggle-block",  adminController.toggleBlock);
+
+// ─── PROJETS ──────────────────────────────────────────────────────────────────
+// GET /api/admin/projects
+router.get("/projects", adminController.getAllProjects);
+
+// ─── ESCROW ───────────────────────────────────────────────────────────────────
+// GET  /api/admin/escrow-projects
+// POST /api/admin/release-funds      { projectId }
+// POST /api/admin/refund/:id
+router.get("/escrow-projects",   adminController.getEscrowProjects);
+router.post("/release-funds",    adminController.releaseFunds);
+router.post("/refund/:id",       adminController.refundClient);
+
+// ─── LITIGES ──────────────────────────────────────────────────────────────────
+// GET /api/admin/disputes
+// PUT /api/admin/disputes/:id/resolve   { decision, note }
+router.get("/disputes",                  adminController.getDisputes);
+router.put("/disputes/:id/resolve",      adminController.resolveDispute);
+router.get('/escrow', async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const freelancers = await User.countDocuments({ role: 'freelance' });
-    const clients = await User.countDocuments({ role: 'client' });
+    const Project = require("../models/project");
 
-    res.json({
-      users: totalUsers,
-      freelancers,
-      clients
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Erreur lors du calcul des stats", error });
+    const projects = await Project.find({ escrowStatus: "locked" })
+      .populate("owner", "name email")
+      .populate("acceptedFreelancer", "name email");
+
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
-
-// --- ROUTE 2 : OBTENIR TOUS LES UTILISATEURS (Pour la partie Utilisateurs) ---
-// Accessible via : GET /api/admin/users
-router.get('/users', userController.getAllUsers);
-router.delete('/users/:id', userController.deleteUser);
-
-// --- ROUTE 3 : GESTION DES PROJETS ---
-router.get('/projects', projectController.getAllProjectsAdmin);
-
-// --- ROUTE 4 : ACTIONS ESCROW (Nouveau !) ---
-// Ces routes correspondent aux actions du site Angular
-router.get('/escrow-projects', adminController.getEscrowProjects);
-router.post('/release-funds', adminController.releaseFunds);
-router.post('/refund-client', adminController.refundClient);
 module.exports = router;

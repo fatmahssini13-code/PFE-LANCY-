@@ -13,29 +13,51 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with SingleTickerProviderStateMixin {
   final NotificationService _service = NotificationService();
-  final Color lancyPurple = const Color(0xFF8E2DE2);
+
+  // ── Lancy Brand ─────────────────────────────────────
+  static const Color _blue    = Color(0xFF00D2FF);
+  static const Color _purple  = Color(0xFF9249FD);
+  static const Color _dark    = Color(0xFF1A1A2E);
+  static const Color _bgLight = Color(0xFFF4F6FF);
+  static const LinearGradient _grad = LinearGradient(
+    colors: [_blue, _purple],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   List<Map<String, dynamic>> _notifications = [];
   bool _loading = true;
+
+  late AnimationController _animCtrl;
 
   @override
   void initState() {
     super.initState();
+    _animCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
     _loadNotifications();
-    markAllAsRead();
+    _markAllRead();
   }
 
-  Future<void> markAllAsRead() async {
-    final token = await AuthService.getToken();
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
 
+  Future<void> _markAllRead() async {
+    final token = await AuthService.getToken();
     await http.put(
-      Uri.parse("${ApiConfig.baseURL}/notifications/read-all"),
-      headers: {"Authorization": "Bearer $token"},
+      Uri.parse('${ApiConfig.baseURL}/notifications/read-all'),
+      headers: {'Authorization': 'Bearer $token'},
     );
   }
 
   Future<void> _loadNotifications() async {
+    setState(() => _loading = true);
     final token = await AuthService.getToken();
     if (token == null) {
       setState(() => _loading = false);
@@ -44,305 +66,410 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final data = await _service.getNotifications(token);
     setState(() {
       _notifications = data;
-      _loading = false;
+      _loading       = false;
     });
+    _animCtrl.forward(from: 0);
   }
 
-  Future<void> _markAllRead() async {
-    final token = await AuthService.getToken();
-    if (token == null) return;
-    await _service.markAllRead(token);
-    setState(() {
-      for (var n in _notifications) {
-        n['isRead'] = true;
-      }
-    });
-  }
-
-  // Récupère les initiales du nom dans le message
-  String _getInitials(String message) {
-    final parts = message.split(' ');
-    if (parts.isEmpty) return '?';
-    return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
-  }
-
-  // Détermine le type de notification
-  String _getType(String title) {
-    if (title.contains('acceptée')) return 'accepted';
-    if (title.contains('refusée')) return 'rejected';
+  // ── Helpers ──────────────────────────────────────────
+  String _notifType(String? title) {
+    final t = (title ?? '').toLowerCase();
+    if (t.contains('acceptée') || t.contains('accepté')) return 'accepted';
+    if (t.contains('refusée') || t.contains('refusé'))  return 'rejected';
+    if (t.contains('livré'))                             return 'delivered';
+    if (t.contains('payé') || t.contains('paiement'))   return 'payment';
     return 'new';
-  }
-
-  // Groupe les notifications par date
-  Map<String, List<Map<String, dynamic>>> _groupByDate() {
-    final Map<String, List<Map<String, dynamic>>> grouped = {};
-    for (var notif in _notifications) {
-      final time = notif['time'] ?? '';
-      final key = notif['isToday'] == true ? "Aujourd'hui" : "Hier";
-      grouped.putIfAbsent(key, () => []).add(notif);
-    }
-    return grouped;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: Text(
-          "Notifications",
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 18),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        actions: [
-          TextButton(
+      backgroundColor: _bgLight,
+      body: CustomScrollView(
+        slivers: [
+          _buildAppBar(),
+          if (_loading)
+            const SliverFillRemaining(child: _LancyLoader())
+          else if (_notifications.isEmpty)
+            SliverFillRemaining(child: _buildEmpty())
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) => _buildItemWithHeader(i),
+                  childCount: _notifications.length,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── App Bar ──────────────────────────────────────────
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      expandedHeight: 140,
+      pinned: true,
+      backgroundColor: _purple,
+      foregroundColor: Colors.white,
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: TextButton(
             onPressed: _markAllRead,
             child: Text(
-              "Tout marquer lu",
-              style: GoogleFonts.inter(
-                color: lancyPurple,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+              'Tout lire',
+              style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white.withOpacity(0.9),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13),
+            ),
+          ),
+        ),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: const BoxDecoration(gradient: _grad),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    'Notifications',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_notifications.length} notification${_notifications.length != 1 ? 's' : ''}',
+                    style: GoogleFonts.inter(
+                        color: Colors.white.withOpacity(0.75), fontSize: 13),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
+        title: Text('Notifications',
+            style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w800,
+                fontSize: 17,
+                color: Colors.white)),
+        titlePadding: const EdgeInsets.only(left: 56, bottom: 14),
       ),
-      body: _loading
-          ? Center(child: CircularProgressIndicator(color: lancyPurple))
-          : _notifications.isEmpty
-          ? _buildEmptyState()
-          : RefreshIndicator(
-              color: lancyPurple,
-              onRefresh: _loadNotifications,
+    );
+  }
 
-              child: ListView.builder(
-                itemCount: _notifications.length,
-    itemBuilder: (context, index) {
-  final notif = _notifications[index];
+  // ── List item with date header ────────────────────────
+  Widget _buildItemWithHeader(int index) {
+    final notif = _notifications[index];
+    final dateStr = notif['createdAt']?.toString() ?? '';
+    final date = DateTime.tryParse(dateStr) ?? DateTime.now();
+    final now  = DateTime.now();
 
-  final createdAt = notif['createdAt'];
-  if (createdAt == null) return const SizedBox();
+    bool   showHeader  = false;
+    String headerLabel = '';
 
-  final date = DateTime.tryParse(createdAt.toString());
-  if (date == null) return const SizedBox();
-
-  final now = DateTime.now();
-
-  final isToday =
-      date.year == now.year &&
-      date.month == now.month &&
-      date.day == now.day;
-
-  final yesterday = now.subtract(const Duration(days: 1));
-  final isYesterday =
-      date.year == yesterday.year &&
-      date.month == yesterday.month &&
-      date.day == yesterday.day;
-
-  bool showHeader = false;
-  String headerText = "";
-
-  if (index == 0) {
-    showHeader = true;
-  } else {
-    final prevCreatedAt = _notifications[index - 1]['createdAt'];
-    final prevDate = DateTime.tryParse(prevCreatedAt.toString());
-
-    if (prevDate == null ||
-        date.day != prevDate.day ||
-        date.month != prevDate.month ||
-        date.year != prevDate.year) {
+    if (index == 0) {
       showHeader = true;
+    } else {
+      final prev = DateTime.tryParse(
+          _notifications[index - 1]['createdAt'].toString());
+      if (prev != null && date.day != prev.day) showHeader = true;
     }
-  }
 
-  if (showHeader) {
-    headerText = isToday
-        ? "Aujourd'hui"
-        : isYesterday
-        ? "Hier"
-        : DateFormat('dd/MM/yyyy').format(date);
-  }
+    if (showHeader) {
+      if (date.day == now.day && date.month == now.month) {
+        headerLabel = "Aujourd'hui";
+      } else if (date.day == now.subtract(const Duration(days: 1)).day) {
+        headerLabel = 'Hier';
+      } else {
+        headerLabel = DateFormat('dd MMM yyyy', 'fr_FR').format(date);
+      }
+    }
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      if (showHeader) _buildDateHeader(headerText),
-      _buildNotifCard(notif),
-    ],
-  );
-}
-              ),
-            ),
+    final animation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _animCtrl,
+        curve: Interval(
+          (index / _notifications.length).clamp(0.0, 1.0),
+          1.0,
+          curve: Curves.easeOut,
+        ),
+      ),
+    );
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+                begin: const Offset(0, 0.15), end: Offset.zero)
+            .animate(animation),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showHeader) _buildDateHeader(headerLabel),
+            _buildNotifCard(notif),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildDateHeader(String label) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: const Color(0xFFF8F9FA),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey,
-          letterSpacing: 0.06,
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 16, 0, 8),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 14,
+            decoration: BoxDecoration(
+                gradient: _grad, borderRadius: BorderRadius.circular(4)),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label.toUpperCase(),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: _purple.withOpacity(0.7),
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildNotifCard(Map<String, dynamic> notif) {
-    final type = _getType(notif['title'] ?? '');
-    final isRead = notif['isRead'] ?? true;
-    final initials = _getInitials(notif['message'] ?? '');
-
-    Color avatarBg;
-    Widget avatarChild;
-    Color cardBg;
-
-    switch (type) {
-      case 'accepted':
-        avatarBg = Colors.green.shade50;
-        avatarChild = const Text('🎉', style: TextStyle(fontSize: 20));
-        cardBg = Colors.white;
-        break;
-      case 'rejected':
-        avatarBg = Colors.red.shade50;
-        avatarChild = Icon(Icons.close, color: Colors.red.shade300, size: 20);
-        cardBg = Colors.white;
-        break;
-      default:
-        avatarBg = lancyPurple;
-        avatarChild = Text(
-          initials,
-          style: GoogleFonts.poppins(
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
-            fontSize: 15,
-          ),
-        );
-        cardBg = isRead ? Colors.white : const Color(0xFFEEEDFE);
-    }
+    final type   = _notifType(notif['title']);
+    final isRead = notif['read'] ?? notif['isRead'] ?? true;
 
     return Container(
-      // ✅ color dans BoxDecoration uniquement
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: cardBg,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade100, width: 0.5),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Avatar
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(color: avatarBg, shape: BoxShape.circle),
-            child: Center(child: avatarChild),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: isRead
+                ? Colors.black.withOpacity(0.04)
+                : _purple.withOpacity(0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-          const SizedBox(width: 12),
-
-          // Contenu
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        notif['title'] ?? '',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: type == 'new' && !isRead
-                              ? const Color(0xFF3C3489)
-                              : Colors.black87,
+        ],
+        border: isRead
+            ? null
+            : Border.all(color: _purple.withOpacity(0.15)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              // Unread indicator bar
+              if (!isRead)
+                Container(
+                  width: 4,
+                  decoration: const BoxDecoration(gradient: _grad),
+                ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildAvatar(type, notif),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    notif['title'] ?? '',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14,
+                                      fontWeight: isRead
+                                          ? FontWeight.w600
+                                          : FontWeight.w800,
+                                      color: _dark,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  notif['time'] ?? _timeAgo(notif['createdAt']),
+                                  style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade400),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              notif['message'] ?? '',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    Text(
-                      notif['time'] ?? '',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: type == 'new' && !isRead
-                            ? const Color(0xFF534AB7)
-                            : Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  notif['message'] ?? '',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: type == 'new' && !isRead
-                        ? const Color(0xFF534AB7)
-                        : Colors.grey.shade600,
-                    height: 1.4,
+                    ],
                   ),
                 ),
-                if (!isRead && type == 'new') ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: lancyPurple,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Text(
-                      "Nouvelle",
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(String type, Map<String, dynamic> notif) {
+    if (type == 'accepted') {
+      return _avatarContainer(
+          Colors.green.shade50, const Text('🎉', style: TextStyle(fontSize: 20)));
+    }
+    if (type == 'rejected') {
+      return _avatarContainer(
+          Colors.red.shade50,
+          Icon(Icons.close_rounded, color: Colors.red.shade400, size: 20));
+    }
+    if (type == 'payment') {
+      return _avatarContainer(
+          Colors.amber.shade50,
+          Icon(Icons.payments_rounded, color: Colors.amber.shade600, size: 20));
+    }
+    if (type == 'delivered') {
+      return _avatarContainer(
+          Colors.blue.shade50,
+          Icon(Icons.inventory_2_outlined, color: Colors.blue.shade400, size: 20));
+    }
+    // Default: gradient avatar with initials
+    final msg = notif['message']?.toString() ?? '';
+    final initials = msg.trim().isNotEmpty
+        ? msg.trim()[0].toUpperCase()
+        : '?';
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        gradient: _grad,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+              color: _purple.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      child: Center(
+        child: Text(initials,
+            style: GoogleFonts.plusJakartaSans(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16)),
+      ),
+    );
+  }
+
+  Widget _avatarContainer(Color bg, Widget child) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      child: Center(child: child),
+    );
+  }
+
+  String _timeAgo(dynamic raw) {
+    if (raw == null) return '';
+    final dt = DateTime.tryParse(raw.toString());
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return "À l'instant";
+    if (diff.inHours < 1)   return 'Il y a ${diff.inMinutes} min';
+    if (diff.inDays < 1)    return 'Il y a ${diff.inHours} h';
+    return 'Il y a ${diff.inDays} j';
+  }
+
+  // ── Empty State ──────────────────────────────────────
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  _blue.withOpacity(0.07),
+                  _purple.withOpacity(0.07),
                 ],
-              ],
+              ),
+              shape: BoxShape.circle,
             ),
+            child: ShaderMask(
+              shaderCallback: (b) => _grad.createShader(b),
+              child: const Icon(Icons.notifications_none_rounded,
+                  size: 56, color: Colors.white),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Tout est calme ici',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18, fontWeight: FontWeight.w800, color: _dark)),
+          const SizedBox(height: 8),
+          Text(
+            'Vous recevrez une notification dès\nqu\'il y a du nouveau.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 13),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildEmptyState() {
+// ── Shared Loader ────────────────────────────────────
+class _LancyLoader extends StatelessWidget {
+  const _LancyLoader();
+  @override
+  Widget build(BuildContext context) {
     return Center(
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.notifications_off_outlined,
-            size: 80,
-            color: Colors.grey[300],
+          ShaderMask(
+            shaderCallback: (b) => const LinearGradient(
+              colors: [Color(0xFF00D2FF), Color(0xFF9249FD)],
+            ).createShader(b),
+            child: const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(Colors.white),
+              strokeWidth: 3,
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            "Aucune notification",
-            style: GoogleFonts.inter(color: Colors.grey, fontSize: 16),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            "Vous serez notifié ici",
-            style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
-          ),
+          const SizedBox(height: 16),
+          Text('Chargement...',
+              style: GoogleFonts.inter(
+                  color: Colors.grey.shade500, fontSize: 13)),
         ],
       ),
     );

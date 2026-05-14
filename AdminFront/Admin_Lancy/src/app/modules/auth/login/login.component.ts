@@ -51,10 +51,11 @@ private apiUrl = "http://192.168.100.13:5001";
     }
   }
 verifyAdminOTP() {
-  const data = {
-    email: this.loginForm.value.email,
-    code: this.otpValue
-  };
+ const data = {
+  email: this.loginForm.value.email,
+  code: this.otpValue,
+  isFromRegister: true
+};
 
   this.http.post(`${this.apiUrl}/api/auth/verify-otp`, data)
     .subscribe({

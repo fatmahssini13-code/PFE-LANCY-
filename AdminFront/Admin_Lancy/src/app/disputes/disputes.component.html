@@ -1,0 +1,100 @@
+<div class="container">
+
+  <h2>Gestion des Litiges</h2>
+
+  <!-- Loading -->
+
+  <div *ngIf="loading" class="loading">
+    Chargement...
+  </div>
+
+  <!-- Aucun litige -->
+
+  <div
+    *ngIf="!loading && disputes.length === 0"
+    class="empty"
+  >
+
+    <h3>✅ Aucun litige ouvert</h3>
+
+    <p>Tous les projets se déroulent bien !</p>
+
+  </div>
+
+  <!-- Liste disputes -->
+
+  <div
+    *ngFor="let project of disputes"
+    class="card"
+  >
+
+    <div class="top">
+
+      <h3>{{ project.title }}</h3>
+
+      <span class="badge">
+        Litige ouvert
+      </span>
+
+    </div>
+
+    <p>
+      <strong>Client:</strong>
+      {{ project.owner?.name }}
+    </p>
+
+    <p>
+      <strong>Freelancer:</strong>
+      {{ project.acceptedFreelancer?.name }}
+    </p>
+
+    <p>
+      <strong>Budget:</strong>
+      {{ project.budget }} DT
+    </p>
+
+    <p>
+      <strong>Raison:</strong>
+      {{ project.dispute?.reason }}
+    </p>
+
+    <textarea
+      [(ngModel)]="note"
+      placeholder="Note admin..."
+    ></textarea>
+
+    <div class="actions">
+
+      <!-- Freelancer wins -->
+
+      <button
+        class="pay"
+        (click)="resolveDispute(
+          project._id,
+          'freelancer'
+        )"
+      >
+
+        Payer Freelancer
+
+      </button>
+
+      <!-- Client wins -->
+
+      <button
+        class="refund"
+        (click)="resolveDispute(
+          project._id,
+          'client'
+        )"
+      >
+
+        Rembourser Client
+
+      </button>
+
+    </div>
+
+  </div>
+
+</div>

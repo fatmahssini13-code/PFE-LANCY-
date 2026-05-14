@@ -1,713 +1,555 @@
 import 'dart:io';
-import 'package:file_picker/file_picker.dart' as picker; // Importation correcte
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
-import 'package:pfe/config/api_config.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pfe/service/project_service.dart';
-import 'package:pfe/service/auth_service.dart';
-import 'package:pfe/service/payment_service.dart';
-import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 
 class ProjectTrackingScreen extends StatefulWidget {
   final Map<String, dynamic> project;
-  final String userRole;
+  final String role;
 
   const ProjectTrackingScreen({
     super.key,
     required this.project,
-    required this.userRole,
+    required this.role,
   });
+
 
   @override
   State<ProjectTrackingScreen> createState() => _ProjectTrackingScreenState();
 }
 
 class _ProjectTrackingScreenState extends State<ProjectTrackingScreen> {
-  final ProjectService _projectService = ProjectService();
-  final TextEditingController _linkController = TextEditingController();
-  final TextEditingController _messageController = TextEditingController();
-  bool _isLoading = false;
-  File? selectedFile;
-
   final Color lancyPurple = const Color(0xFF8E2DE2);
-  final Color skyBlue = const Color(0xFF74C0FC);
-  Future<void> _pickFile() async {
-  // 2. Utilisez l'alias 'picker'
-  picker.FilePickerResult? result = await picker.FilePicker.platform.pickFiles(
-    type: picker.FileType.any, 
-  );
+  final Color lightBlue   = const Color(0xFF00D2FF);
 
-  if (result != null && result.files.single.path != null) {
-    setState(() {
-      selectedFile = File(result.files.single.path!);
-    });
-  }
+  final TextEditingController _linkCtrl    = TextEditingController();
+  final TextEditingController _messageCtrl = TextEditingController();
+
+  String? _fileName;
+  File?   _selectedFile;
+  bool    _isLoading = false;
+late Map<String, dynamic> projectData;
+
+@override
+void initState() {
+  super.initState();
+  projectData = widget.project;
 }
+  final ProjectService _projectService = ProjectService();
+
   @override
   void dispose() {
-    _linkController.dispose();
-    _messageController.dispose();
+    _linkCtrl.dispose();
+    _messageCtrl.dispose();
     super.dispose();
   }
 
-
-  @override
-  Widget build(BuildContext context) {
-    String status = widget.project['status'] ?? 'open';
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: Text("Suivi du Projet",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(status),
-            const SizedBox(height: 20),
-            _buildProgressBar(status),
-            const SizedBox(height: 24),
-
-            // ✅ Freelancer — formulaire livraison
-            if (widget.userRole == 'freelancer' && status == 'in_progress')
-              _buildFreelancerDeliveryForm(),
-
-            // ✅ Freelancer — en attente de validation
-            if (widget.userRole == 'freelancer' && status == 'delivered')
-              _buildWaitingValidation(),
-
-            // ✅ Client — section approbation
-            if (widget.userRole == 'client' && status == 'delivered')
-              _buildClientApprovalSection(),
-
-            // ✅ Terminé
-            if (status == 'completed')
-              _buildSuccessState(),
-
-            const SizedBox(height: 24),
-            _buildProjectDetails(),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
-    );
+  // ✅ Calcul de l'index du Stepper selon le statut
+  int get _stepIndex {
+    switch (widget.project['status']?.toLowerCase()) {
+      case 'in_progress': return 1;
+      case 'delivered':   return 2;
+      case 'completed':
+      case 'paid':        return 3;
+      default:            return 0;
+    }
   }
 
-  // =====================
-  // HEADER
-  // =====================
-  Widget _buildHeader(String status) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.project['title'] ?? "Sans titre",
-            style: GoogleFonts.poppins(
-                fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _getStatusColor(status).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  _getStatusLabel(status),
-                  style: TextStyle(
-                    color: _getStatusColor(status),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                "${widget.project['budget']} DT",
-                style: const TextStyle(
-                    fontSize: 20,
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  Future<void> _pickFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.any);
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _selectedFile = File(result.files.single.path!);
+          _fileName     = result.files.first.name;
+        });
+      }
+    } catch (e) {
+      debugPrint("FilePicker error: $e");
+    }
   }
 
-  // =====================
-  // PROGRESS BAR
-  // =====================
-  Widget _buildProgressBar(String status) {
-    int step = 0;
-    if (status == "in_progress") step = 1;
-    if (status == "delivered") step = 2;
-    if (status == "completed") step = 3;
-
-    final steps = ["Démarré", "En cours", "Livré", "Payé"];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 10)
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(steps.length * 2 - 1, (i) {
-              if (i.isOdd) {
-                return Expanded(
-                  child: Container(
-                    height: 3,
-                    color: i ~/ 2 < step
-                        ? Colors.green
-                        : Colors.grey.shade200,
-                  ),
-                );
-              }
-              final idx = i ~/ 2;
-              final isActive = idx <= step;
-              return Column(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: isActive ? Colors.green : Colors.grey.shade200,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.check,
-                      size: 16,
-                      color: isActive ? Colors.white : Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    steps[idx],
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isActive ? Colors.green : Colors.grey,
-                      fontWeight: isActive
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                    ),
-                  ),
-                ],
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =====================
-  // FREELANCER — LIVRAISON
-  // =====================
-  Widget _buildFreelancerDeliveryForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Bloc escrow
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.green.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.green.shade200),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.lock, color: Colors.green.shade600, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "Paiement sécurisé en escrow — libéré après validation client",
-                  style: GoogleFonts.inter(
-                      color: Colors.green.shade700, fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        Text("Livrer votre travail",
-            style: GoogleFonts.poppins(
-                fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 15),
-
-        // Lien
-        TextField(
-          controller: _linkController,
-          decoration: InputDecoration(
-            labelText: "Lien (Drive, GitHub, Figma...)",
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            prefixIcon: const Icon(Icons.link),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Message
-        TextField(
-          controller: _messageController,
-          maxLines: 3,
-          decoration: InputDecoration(
-            labelText: "Message au client (optionnel)",
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            prefixIcon: const Icon(Icons.message_outlined),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Fichier
-        OutlinedButton.icon(
-          onPressed: _pickFile,
-          icon: const Icon(Icons.attach_file),
-          label: Text(selectedFile != null
-              ? "📎 ${selectedFile!.path.split('/').last}"
-              : "Choisir un fichier"),
-          style: OutlinedButton.styleFrom(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Bouton livrer
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: lancyPurple,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: _isLoading ? null : _handleDelivery,
-            icon: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
-                  )
-                : const Icon(Icons.upload, color: Colors.white),
-            label: Text(
-              _isLoading ? "Envoi en cours..." : "Marquer comme livré",
-              style: GoogleFonts.poppins(
-                  color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // =====================
-  // FREELANCER — EN ATTENTE
-  // =====================
-  Widget _buildWaitingValidation() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blue.shade200),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.hourglass_top, color: Colors.blue.shade600, size: 48),
-          const SizedBox(height: 12),
-          Text(
-            "En attente de validation",
-            style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            "Le client est en train de vérifier votre travail. Le paiement sera libéré après validation.",
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-                color: Colors.blue.shade600, fontSize: 13),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =====================
-  // CLIENT — APPROBATION
-  // =====================
-  Widget _buildClientApprovalSection() {
-    final delivery = widget.project['delivery'];
-    final file = delivery?['file'];
-    final link = delivery?['link'];
-    final message = delivery?['message'];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Travail livré 📦",
-            style: GoogleFonts.poppins(
-                fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.04), blurRadius: 10)
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (message != null && message.isNotEmpty) ...[
-                Text("Message du freelancer :",
-                    style: GoogleFonts.inter(
-                        color: Colors.grey, fontSize: 12)),
-                const SizedBox(height: 4),
-                Text(message,
-                    style: GoogleFonts.inter(fontSize: 14)),
-                const SizedBox(height: 12),
-              ],
-              if (link != null && link.isNotEmpty)
-                TextButton.icon(
-                  onPressed: () async {
-                    final uri = Uri.parse(link);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
-                  icon: const Icon(Icons.link),
-                  label: const Text("Ouvrir le lien"),
-                ),
-              if (file != null && file.isNotEmpty)
-                TextButton.icon(
-                  onPressed: () async {
-                    final url =
-                        Uri.parse("${ApiConfig.origin}/uploads/$file");
-                    if (await canLaunchUrl(url)) {
-                      await launchUrl(url);
-                    }
-                  },
-                  icon: const Icon(Icons.insert_drive_file),
-                  label: const Text("Télécharger le fichier"),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // ✅ Bouton approuver
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: _isLoading ? null : _handleApproval,
-            icon: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_circle, color: Colors.white),
-            label: Text(
-              _isLoading ? "Traitement..." : "Valider et libérer le paiement",
-              style: GoogleFonts.poppins(
-                  color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // ✅ Bouton litige
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => _showDisputeDialog(),
-            icon: const Icon(Icons.warning_amber),
-            label: Text("Ouvrir un litige",
-                style: GoogleFonts.poppins()),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // =====================
-  // SUCCÈS
-  // =====================
-  Widget _buildSuccessState() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.green.shade200),
-      ),
-      child: Column(
-        children: [
-          const Icon(Icons.check_circle, size: 80, color: Colors.green),
-          const SizedBox(height: 12),
-          Text("Projet Terminé ! 🎉",
-              style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green)),
-          const SizedBox(height: 6),
-          Text(
-            widget.userRole == 'client'
-                ? "Le paiement a été libéré au freelancer."
-                : "Vous avez reçu le paiement sur votre wallet !",
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(color: Colors.green.shade700),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =====================
-  // DÉTAILS PROJET
-  // =====================
-  Widget _buildProjectDetails() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 10)
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Description",
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Text(
-            widget.project['description'] ?? "Aucune description",
-            style: GoogleFonts.inter(
-                color: Colors.grey.shade700, height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =====================
-  // ACTIONS
-  // =====================
   Future<void> _handleDelivery() async {
-    if (_linkController.text.isEmpty && selectedFile == null) {
-      Get.snackbar("Erreur", "Ajoute un lien ou un fichier",
-          backgroundColor: Colors.red.shade100);
+    if (_linkCtrl.text.trim().isEmpty && _selectedFile == null) {
+      Get.snackbar(
+        "Champ requis",
+        "Ajoute un lien ou un fichier avant de livrer",
+        backgroundColor: Colors.red.shade100,
+        colorText: Colors.red.shade800,
+        snackPosition: SnackPosition.TOP,
+      );
       return;
     }
 
     setState(() => _isLoading = true);
 
-    final bool ok = await _projectService.deliverProject(
-      widget.project['_id'],
-      _linkController.text,
-      _messageController.text,
-    );
-
-    setState(() => _isLoading = false);
-
-    if (ok) {
-      Get.snackbar(
-        "Livraison envoyée ! 📦",
-        "Le client va vérifier votre travail",
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
-      Navigator.pop(context, true);
-    } else {
-      Get.snackbar("Erreur", "Impossible d'envoyer la livraison",
-          backgroundColor: Colors.red.shade100);
-    }
-  }
-
-  Future<void> _handleApproval() async {
-    setState(() => _isLoading = true);
-
     try {
-      final token = await AuthService.getToken();
-      final response = await http.put(
-        Uri.parse(
-            '${ApiConfig.baseURL}/projects/${widget.project["_id"]}/approve'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      setState(() => _isLoading = false);
-
-      if (response.statusCode == 200) {
-        Get.snackbar(
-          "Paiement libéré ! 💸",
-          "Le freelancer a été payé avec succès",
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
+      bool ok;
+      if (_selectedFile != null) {
+        ok = await _projectService.uploadDeliveryFile(
+          widget.project['_id'],
+          _selectedFile,
+          _linkCtrl.text.trim(),
         );
-        Navigator.pop(context, true);
       } else {
-        Get.snackbar("Erreur", "Impossible de valider",
-            backgroundColor: Colors.red.shade100);
+        ok = await _projectService.deliverProject(
+          widget.project['_id'],
+          _linkCtrl.text.trim(),
+          _messageCtrl.text.trim(),
+        );
+      }
+
+   if (ok) {
+  final updatedProject =
+      await _projectService.getProjectById(projectData['_id']);
+
+  setState(() {
+    projectData = updatedProject;
+  });
+
+  Get.snackbar(
+    "Livraison envoyée 📦",
+    "Le client va vérifier votre travail",
+    backgroundColor: Colors.green,
+    colorText: Colors.white,
+  );
+
+  Navigator.pop(context, true);
+} else {
+        Get.snackbar(
+          "Erreur",
+          "Impossible d'envoyer la livraison",
+          backgroundColor: Colors.red.shade100,
+          colorText: Colors.red.shade800,
+        );
       }
     } catch (e) {
-      setState(() => _isLoading = false);
       Get.snackbar("Erreur", e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showDisputeDialog() {
-    final reasonCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        title: Text("Ouvrir un litige",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text("Expliquez le problème :",
-                style: GoogleFonts.inter(color: Colors.grey)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonCtrl,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: "Décrivez le problème...",
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FE),
+        appBar: AppBar(
+          title: Text("Project tracking",
+              style: GoogleFonts.inter(
+                  color: Colors.black54,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600)),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black54),
             onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler"),
           ),
-          ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final token = await AuthService.getToken();
-              await http.put(
-                Uri.parse(
-                    '${ApiConfig.baseURL}/escrow/dispute/${widget.project["_id"]}'),
-                headers: {
-                  'Authorization': 'Bearer $token',
-                  'Content-Type': 'application/json',
-                },
-                body: '{"reason": "${reasonCtrl.text}"}',
-              );
-              Navigator.pop(context);
-              Get.snackbar(
-                "Litige ouvert",
-                "L'administrateur va intervenir",
-                backgroundColor: Colors.orange,
-                colorText: Colors.white,
-              );
-            },
-            child: const Text("Confirmer",
-                style: TextStyle(color: Colors.white)),
+        ),
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildHeader(),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    _buildStepper(),
+                    const SizedBox(height: 20),
+                    _buildEscrowNotice(),
+                    const SizedBox(height: 20),
+
+                    // --- LOGIQUE FREELANCER ---
+                    if (widget.role == 'freelancer' && projectData['status'] == 'in_progress') ...[
+                      // ✅ Message si le client a refusé la livraison précédente
+                      if (projectData['delivery'] != null &&
+    projectData['delivery']['status'] == 'refused')
+  _buildRejectionNotice(),
+                      
+                      _buildDeliveryForm(),
+                      const SizedBox(height: 20),
+                      _buildMainButton(),
+                    ],
+
+                    if (widget.role == 'freelancer' && projectData['status'] == 'delivered')
+                      _buildWaitingCard(),
+
+                    // --- ÉTATS GÉNÉRAUX ---
+                    if (projectData['status'] == 'completed')
+                      _buildCompletedCard(),
+
+                    const SizedBox(height: 30),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- WIDGETS DE COMPOSANTS ---
+
+Widget _buildRejectionNotice() {
+  final delivery = projectData['delivery'];
+
+  if (delivery == null || delivery['status'] != 'refused') {
+    return const SizedBox.shrink();
+  }
+
+  return Container(
+    margin: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.orange.shade50,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: Colors.orange.shade200),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.info_outline, color: Colors.orange),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            "Livraison refusée : ${delivery['refusedReason'] ?? ''}",
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(25),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [lightBlue, const Color(0xFF928DFF), lancyPurple],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft:  Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  projectData['title'] ?? "Projet",
+                  style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  "${projectData['budget'] ?? '0'}\nDT",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 15),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.sync, color: Colors.white, size: 16),
+                const SizedBox(width: 5),
+                Text(
+                  _statusLabel(projectData['status']),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-
-  // =====================
-  // HELPERS
-  // =====================
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'in_progress': return Colors.orange;
-      case 'delivered': return Colors.blue;
-      case 'completed': return Colors.green;
-      default: return Colors.grey;
-    }
+  Widget _buildStepper() {
+    final step = _stepIndex;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _stepCircle(Icons.check, step >= 0),
+              _stepLine(step > 0),
+              _stepCircle(Icons.sync, step >= 1),
+              _stepLine(step > 1),
+              _stepCircle(Icons.inventory_2_outlined, step >= 2),
+              _stepLine(step > 2),
+              _stepCircle(Icons.payment, step >= 3),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _stepLabel("Démarré",   step >= 0),
+              _stepLabel("En cours", step >= 1),
+              _stepLabel("Livré",     step >= 2),
+              _stepLabel("Payé",      step >= 3),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
-  String _getStatusLabel(String status) {
+  Widget _stepCircle(IconData icon, bool isActive) => Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isActive ? lancyPurple.withOpacity(0.8) : Colors.grey[200],
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon,
+            color: isActive ? Colors.white : Colors.grey, size: 18),
+      );
+
+  Widget _stepLine(bool isActive) => Container(
+        width: 20, height: 2,
+        color: isActive ? lightBlue : Colors.grey[300],
+      );
+
+  Widget _stepLabel(String text, bool isActive) => Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          color: isActive ? lancyPurple : Colors.grey,
+          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+        ),
+      );
+
+  Widget _buildEscrowNotice() => Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F5E9),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.lock_outline, color: Color(0xFF4CAF50), size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "Paiement sécurisé en escrow — libéré après validation",
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF2E7D32),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _buildDeliveryForm() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Livrer votre travail",
+              style: GoogleFonts.inter(
+                  fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _linkCtrl,
+            decoration: InputDecoration(
+              hintText: "Lien GitHub, Drive, Figma...",
+              prefixIcon: Icon(Icons.link, color: lancyPurple, size: 20),
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _messageCtrl,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: "Message au client (optionnel)...",
+              prefixIcon: Icon(Icons.chat_bubble_outline,
+                  color: lancyPurple, size: 20),
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _pickFile,
+              icon: Icon(Icons.attach_file, color: lancyPurple, size: 20),
+              label: Text(
+                _fileName ?? "Choisir un fichier",
+                style: TextStyle(color: lancyPurple),
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                side: BorderSide(color: Colors.black.withOpacity(0.1)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainButton() {
+    return Container(
+      width: double.infinity,
+      height: 55,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(15),
+        gradient: LinearGradient(colors: [lightBlue, lancyPurple]),
+        boxShadow: [
+          BoxShadow(
+              color: lancyPurple.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 5)),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: _isLoading ? null : _handleDelivery,
+        icon: _isLoading
+            ? const SizedBox(
+                width: 20, height: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2))
+            : const Icon(Icons.file_upload_outlined, color: Colors.white),
+        label: Text(
+          _isLoading ? "Envoi en cours..." : "Marquer comme livré",
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWaitingCard() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.hourglass_top_rounded,
+                size: 48, color: Colors.blue.shade400),
+            const SizedBox(height: 12),
+            Text("En attente de validation",
+                style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade700)),
+            const SizedBox(height: 8),
+            Text(
+              "Le client vérifie votre travail.\nLe paiement sera libéré après validation.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                  color: Colors.blue.shade600,
+                  fontSize: 13,
+                  height: 1.5),
+            ),
+          ],
+        ),
+      );
+
+  Widget _buildCompletedCard() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.green.shade50,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.green.shade200),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.check_circle_rounded,
+                size: 56, color: Colors.green),
+            const SizedBox(height: 12),
+            Text("Projet Terminé 🎉",
+                style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green.shade700)),
+            const SizedBox(height: 8),
+            Text(
+              "Paiement reçu sur votre wallet !",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                  color: Colors.green.shade600, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+
+  String _statusLabel(String? status) {
     switch (status) {
-      case 'open': return 'Ouvert';
       case 'in_progress': return 'En cours';
-      case 'delivered': return 'Livré';
-      case 'completed': return 'Terminé';
-      default: return status;
+      case 'delivered':   return 'Livré';
+      case 'completed':   return 'Terminé';
+      default:            return 'Ouvert';
     }
   }
 }

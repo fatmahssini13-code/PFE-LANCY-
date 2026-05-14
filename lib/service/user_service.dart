@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:pfe/Model/User.dart';
 import 'package:pfe/config/api_config.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:pfe/service/auth_service.dart';
 
 class UserService {
 
@@ -78,5 +79,14 @@ Future<String?> uploadAvatar({
     print("❌ Upload error: $e");
     return null;
   }
+}
+Future<Map<String, dynamic>> getWallet() async {
+  final token = await AuthService.getToken();
+  final res = await http.get(
+    Uri.parse("${ApiConfig.baseURL}/users/wallet"),
+    headers: {"Authorization": "Bearer $token"},
+  );
+  if (res.statusCode == 200) return jsonDecode(res.body);
+  return {"balance": 0, "transactions": []};
 }
 }

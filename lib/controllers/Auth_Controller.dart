@@ -1,9 +1,8 @@
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:pfe/config/api_config.dart';
+import 'package:pfe/screens/main_screen.dart';
 import 'package:pfe/service/auth_service.dart';
-
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthController extends GetxController {
   final _isLoading = false.obs;
@@ -12,18 +11,30 @@ class AuthController extends GetxController {
   Future<String?> login(String email, String password) async {
     try {
       _isLoading.value = true;
-      
-      // On appelle le service. Le service s'occupe déjà de SharedPreferences !
-      final dynamic response = await AuthService.login(
+
+      // 1. Logique el login
+      await AuthService.login(
         email: email.trim(), 
         password: password
       );
-      
+
+      // 2. Nejbdou el ma3loumet mel AuthService ba3d ma t-sayivou f-el SharedPreferences
+      final String? emailData = await AuthService.getUserEmail();
+      final String? roleData = await AuthService.getUserRole();
+      final String? nameData = await AuthService.getUserName();
+
       _isLoading.value = false;
+
+      // 3. Taw n-hazzou lel MainScreen b-el ma3loumet el s-hiha
+      Get.offAll(() => MainScreen(
+        email: emailData ?? email.trim(),
+        role: roleData ?? 'client', // Default 'client' ken malqach role
+        name: nameData,
+      ));
+
       return null; 
     } catch (e) {
       _isLoading.value = false;
-      // On nettoie le message d'erreur pour l'utilisateur
       return e.toString().replaceAll("Exception:", "").trim();
     }
   }
@@ -57,7 +68,7 @@ class AuthController extends GetxController {
   Future<void> logout() async {
     try {
       _isLoading.value = true;
-      await AuthService.logout(); // On utilise la méthode du service
+      await AuthService.logout(); 
       Get.offAllNamed('/login'); 
       _isLoading.value = false;
     } catch (e) {
@@ -65,16 +76,19 @@ class AuthController extends GetxController {
       print("Erreur logout: $e");
     }
   }
+
   Future<bool> checkUserValidity() async {
-  try {
-    
-    final response = await http.get(
-      Uri.parse("${ApiConfig.baseURL}/auth/profile"),
-      headers: {"Authorization": "Bearer ${await AuthService.getToken()}"},
-    );
-    return response.statusCode == 200;
-  } catch (e) {
-    return false;
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) return false;
+
+      final response = await http.get(
+        Uri.parse("${ApiConfig.baseURL}/auth/profile"),
+        headers: {"Authorization": "Bearer $token"},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
   }
-}
 }
