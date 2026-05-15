@@ -1,4 +1,4 @@
-const Project = require("../models/Project");
+const Project = require("../models/project");
 const User = require("../models/User");
 
 // ─── 1. STATS ────────────────────────────────────────────────────────────────
