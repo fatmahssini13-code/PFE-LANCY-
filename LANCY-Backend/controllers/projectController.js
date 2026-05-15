@@ -1,6 +1,6 @@
 const Project = require("../models/project");
 const Proposal = require("../models/proposal");
-const User = require("../models/user");
+const User = require("../models/User");
 
 // --- 1. CRÉER UN PROJET (C'est ici que l'erreur se produisait) ---
 exports.createProject = async (req, res) => {
