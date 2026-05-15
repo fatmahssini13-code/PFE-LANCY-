@@ -96,12 +96,12 @@ io.on("connection", (socket) => {
 });
 console.log("MAIN SERVER LOADED");
 // ================= START =================
-const PORT = 5001;
+const PORT = process.env.PORT || 5000;
 
 connectDB()
   .then(() => {
     server.listen(PORT, () =>
-      console.log("🚀 server running on http://localhost:" + PORT)
+      console.log(`🚀 server running on port ${PORT}`)
     );
   })
 

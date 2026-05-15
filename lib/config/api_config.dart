@@ -7,7 +7,6 @@ class ApiConfig {
   //static const String _lanDevHost = '192.168.1.100';
  // static const String _lanDevHost = '10.152.12.126';
   static const int apiPort = 5001; 
-
   static String _host = '127.0.0.1';
   static bool _ready = false;
 
