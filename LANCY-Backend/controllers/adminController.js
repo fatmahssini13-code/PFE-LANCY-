@@ -81,6 +81,7 @@ exports.getEscrowProjects = async (req, res) => {
   try {
     const projects = await Project.find({ paymentStatus: "escrow_locked" })
       .populate("owner", "name email")
+      .populate("acceptedFreelancer", "name email")
       .populate({
         path: "selectedProposal",
         populate: { path: "freelancer", select: "name email" },
@@ -102,6 +103,7 @@ exports.releaseFunds = async (req, res) => {
     }
 
     project.paymentStatus = "released";
+    project.escrowStatus = "released";
     project.status        = "completed";
     await project.save();
 
@@ -129,6 +131,7 @@ exports.refundClient = async (req, res) => {
     }
 
     project.paymentStatus = "refunded";
+    project.escrowStatus = "refunded";
     project.status        = "cancelled";
     await project.save();
 

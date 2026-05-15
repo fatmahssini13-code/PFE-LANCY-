@@ -35,15 +35,54 @@ router.post("/add", requireAuth, async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
+    if (client._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Vous ne pouvez publier que pour votre compte" });
+    }
+
+    if (client.role !== "client") {
+      return res.status(403).json({ message: "Seuls les clients peuvent publier une mission" });
+    }
+
+    const budgetNum = Number(budget);
+    if (!Number.isFinite(budgetNum) || budgetNum <= 0) {
+      return res.status(400).json({ message: "Budget invalide" });
+    }
+
+    const reserved = await User.findOneAndUpdate(
+      {
+        _id: client._id,
+        role: "client",
+        walletBalance: { $gte: budgetNum }
+      },
+      { $inc: { walletBalance: -budgetNum } },
+      { new: true }
+    );
+
+    if (!reserved) {
+      return res.status(400).json({
+        message: "Solde wallet insuffisant",
+        code: "INSUFFICIENT_WALLET",
+        balance: client.walletBalance ?? 0
+      });
+    }
+
     const newProject = new Project({
       title,
       description,
-      budget,
+      budget: budgetNum,
       owner: client._id,
       status: "open",
+      paymentStatus: "not_locked",
+      escrowStatus: "not_locked",
+      fundedFromWallet: true
     });
 
-    await newProject.save();
+    try {
+      await newProject.save();
+    } catch (saveErr) {
+      await User.findByIdAndUpdate(client._id, { $inc: { walletBalance: budgetNum } });
+      throw saveErr;
+    }
 
     res.status(201).json({
       message: "Projet ajouté",

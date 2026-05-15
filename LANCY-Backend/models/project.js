@@ -11,6 +11,18 @@ const projectSchema = new mongoose.Schema({
     required: true
   },
 
+  acceptedFreelancer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+
+  selectedProposal: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Proposal',
+    default: null
+  },
+
   status: {
     type: String,
     enum: ["open", "in_progress", "delivered", "completed", "cancelled", "disputed"],
@@ -48,6 +60,9 @@ const projectSchema = new mongoose.Schema({
     }
   },
 
-  escrowAmount: { type: Number, default: 0 }
+  escrowAmount: { type: Number, default: 0 },
+
+  /** Budget prélevé du wallet client à la création du projet */
+  fundedFromWallet: { type: Boolean, default: false }
 }, { timestamps: true });
 module.exports = mongoose.models.Project || mongoose.model("Project", projectSchema);

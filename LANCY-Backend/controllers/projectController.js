@@ -120,9 +120,22 @@ exports.updateProject = async (req, res) => {
 exports.deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const project = await Project.findByIdAndDelete(id);
+    const project = await Project.findById(id);
 
     if (!project) return res.status(404).json({ message: "Projet non trouvé" });
+
+    const canRefundWallet =
+      project.fundedFromWallet &&
+      project.status === "open" &&
+      project.paymentStatus === "not_locked";
+
+    if (canRefundWallet) {
+      await User.findByIdAndUpdate(project.owner, {
+        $inc: { walletBalance: project.budget }
+      });
+    }
+
+    await Project.findByIdAndDelete(id);
 
     res.status(200).json({ message: "Projet supprimé avec succès" });
   } catch (error) {

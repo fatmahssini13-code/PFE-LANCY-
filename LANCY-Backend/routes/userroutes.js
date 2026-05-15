@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const User = require("../models/User");
+const Project = require("../models/project");
 const bcrypt = require("bcrypt"); // ✅ manquait !
 const multer = require("multer"); // ✅ une seule fois
 const path = require("path");     // ✅ une seule fois
@@ -140,21 +141,29 @@ router.post("/upload-avatar/:email", upload.single("avatar"), async (req, res) =
   }
 });
 router.get("/wallet", requireAuth, async (req, res) => {
-  const user = await User.findById(req.user._id).select("walletBalance");
-  res.json({ balance: user.walletBalance });
-});
-// Wallet — historique des projets payés
-router.get("/wallet", requireAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("walletBalance");
-    const projects = await Project.find({
-      acceptedFreelancer: req.user._id,
-      status: "completed"
-    }).select("title budget createdAt").sort({ createdAt: -1 });
-
+    const user = await User.findById(req.user._id).select("walletBalance role");
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+    const balance = user.walletBalance ?? 0;
+    if (user.role === "freelancer") {
+      const projects = await Project.find({
+        acceptedFreelancer: req.user._id,
+        status: "completed"
+      })
+        .select("title budget createdAt")
+        .sort({ createdAt: -1 });
+      return res.json({
+        balance,
+        currency: "EUR",
+        transactions: projects
+      });
+    }
     res.json({
-      balance: user.walletBalance ?? 0,
-      transactions: projects
+      balance,
+      currency: "EUR",
+      transactions: []
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

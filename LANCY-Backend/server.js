@@ -12,6 +12,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 const connectDB = require("./config/db");
 const Message = require("./models/message");
 const Project = require("./models/project");
+const User = require("./models/User");
 const stripe = require("./config/stripe");
 
 app.set("socketio", io);
@@ -39,10 +40,38 @@ app.post(
       return res.sendStatus(400);
     }
 
-    // ================= ESCROW FLOW =================
+    // ================= ESCROW + WALLET TOP-UP =================
     if (event.type === "payment_intent.succeeded") {
       const paymentIntent = event.data.object;
-      const projectId = paymentIntent.metadata.projectId;
+      const meta = paymentIntent.metadata || {};
+
+      if (meta.purpose === "wallet_topup" && meta.userId) {
+        const piId = paymentIntent.id;
+        const cents =
+          paymentIntent.amount_received != null
+            ? paymentIntent.amount_received
+            : paymentIntent.amount;
+        const euros = cents / 100;
+        const up = await User.updateOne(
+          {
+            _id: meta.userId,
+            processedWalletTopUpIntentIds: { $nin: [piId] }
+          },
+          {
+            $inc: { walletBalance: euros },
+            $push: { processedWalletTopUpIntentIds: piId }
+          }
+        );
+        if (up.modifiedCount > 0) {
+          console.log("💰 Wallet rechargé (webhook):", meta.userId, euros, "EUR");
+        }
+        return res.json({ received: true });
+      }
+
+      const projectId = meta.projectId;
+      if (!projectId) {
+        return res.json({ received: true });
+      }
 
       const project = await Project.findById(projectId);
 
@@ -71,6 +100,15 @@ app.post(
 // AFTER webhook ONLY
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
+
+// Clé publique Stripe : même compte que STRIPE_SECRET_KEY (évite mismatch app mobile).
+app.get("/api/config/stripe-publishable-key", (req, res) => {
+  const pk = process.env.STRIPE_PUBLISHABLE_KEY;
+  if (!pk || !String(pk).startsWith("pk_")) {
+    return res.status(500).json({ error: "STRIPE_PUBLISHABLE_KEY manquante ou invalide" });
+  }
+  res.json({ publishableKey: String(pk).trim() });
+});
 
 // ================= ROUTES =================
 app.use("/api/auth", require("./routes/authRoutes"));

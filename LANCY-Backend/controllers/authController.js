@@ -247,34 +247,45 @@ exports.resetPassword = async (req, res) => {
 // Ajoute ceci à la fin de ton fichier authController.js
 exports.adminLogin = async (req, res) => {
   try {
-    const emailRecu = req.body.email ? req.body.email.trim().toLowerCase() : "";
+    const emailRecu = normalizeEmail(req.body.email);
     const passRecu = req.body.password;
 
-    const ADMIN_EMAIL = "fatmahssini3@gmail.com";
-    const ADMIN_PASS = "123456";
+    const ADMIN_EMAIL = normalizeEmail(process.env.ADMIN_EMAIL || "fatmahssini3@gmail.com");
+    const ADMIN_PASS = process.env.ADMIN_PASSWORD || "123456";
 
     console.log(`Tentative Login Admin: [${emailRecu}]`);
 
-    if (emailRecu === ADMIN_EMAIL && passRecu === ADMIN_PASS) {
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-      // Enregistrement de l'OTP
-      const OTP = require("../models/OTP");
-      await OTP.findOneAndUpdate(
-        { email: ADMIN_EMAIL },
-        { code: otpCode, expiresAt, verified: false },
-        { upsert: true }
-      );
-
-      // Envoi de l'email
-      const emailService = require("../services/emailServices");
-      await emailService.sendOTPEmail(ADMIN_EMAIL, otpCode);
-
-      return res.json({ message: "OTP envoyé", step: 2 });
+    if (emailRecu !== ADMIN_EMAIL || passRecu !== ADMIN_PASS) {
+      return res.status(401).json({ message: "Identifiants Admin incorrects" });
     }
 
-    return res.status(401).json({ message: "Identifiants Admin incorrects" });
+    let adminUser = await findUserByEmailLoose(ADMIN_EMAIL);
+    if (!adminUser) {
+      const hashedPassword = await bcrypt.hash(ADMIN_PASS, 10);
+      adminUser = await User.create({
+        name: "Administrateur",
+        email: ADMIN_EMAIL,
+        password: hashedPassword,
+        role: "admin",
+        isVerified: true,
+      });
+    } else if (adminUser.role !== "admin") {
+      adminUser.role = "admin";
+      adminUser.isVerified = true;
+      await adminUser.save();
+    }
+
+    const token = signToken(adminUser._id);
+    return res.json({
+      message: "Connexion réussie",
+      token,
+      user: {
+        _id: adminUser._id,
+        name: adminUser.name,
+        email: adminUser.email,
+        role: adminUser.role,
+      },
+    });
   } catch (err) {
     console.error("Erreur AdminLogin:", err);
     return res.status(500).json({ message: "Erreur serveur", error: err.message });
